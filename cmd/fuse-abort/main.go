@@ -81,7 +81,7 @@ func abort(id string) error {
 	f, err := os.OpenFile(p, os.O_WRONLY, 0600)
 	if errors.Is(err, os.ErrNotExist) {
 		// nothing to abort, consider that a success because we might
-		// have just raced against an unmount
+		// have just raced against unmount
 		return nil
 	}
 	if err != nil {
@@ -99,15 +99,15 @@ func abort(id string) error {
 }
 
 func pruneEmptyDir(p string) error {
-	// we want an rmdir and not a generic delete like
-	// os.Remove; the node underlying the mountpoint might not
+	// we want rmdir and not a generic delete like
+	// os.Rmdir; the node underlying the mountpoint might not
 	// be a directory, and we really want to only prune
 	// directories
 	if err := syscall.Rmdir(p); err != nil {
-		switch err {
-		case syscall.ENOTEMPTY, syscall.ENOTDIR:
+		switch {
+		case errors.Is(err, syscall.ENOTEMPTY), errors.Is(err, syscall.ENOTDIR):
 			// underlying node wasn't an empty dir; ignore
-		case syscall.ENOENT:
+		case errors.Is(err, syscall.ENOENT):
 			// someone else removed it for us; ignore
 		default:
 			err = &os.PathError{
@@ -174,11 +174,11 @@ func run(prune bool, mountpoints []string) error {
 var prog = filepath.Base(os.Args[0])
 
 func usage() {
-	fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", prog)
-	fmt.Fprintf(flag.CommandLine.Output(), "  %s MOUNTPOINT..\n", prog)
-	fmt.Fprintf(flag.CommandLine.Output(), "\n")
-	fmt.Fprintf(flag.CommandLine.Output(), "Forcibly aborts a FUSE filesystem mounted at the given path.\n")
-	fmt.Fprintf(flag.CommandLine.Output(), "\n")
+	_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", prog)
+	_, _ = fmt.Fprintf(flag.CommandLine.Output(), "  %s MOUNTPOINT..\n", prog)
+	_, _ = fmt.Fprintf(flag.CommandLine.Output(), "\n")
+	_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Forcibly aborts a FUSE filesystem mounted at the given path.\n")
+	_, _ = fmt.Fprintf(flag.CommandLine.Output(), "\n")
 	flag.PrintDefaults()
 }
 
@@ -197,7 +197,7 @@ func main() {
 	}
 
 	if err := run(prune, flag.Args()); err != nil {
-		if err == errWarnings {
+		if errors.Is(err, errWarnings) {
 			// they've already been logged
 			os.Exit(1)
 		}

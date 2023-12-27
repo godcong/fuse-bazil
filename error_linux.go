@@ -9,9 +9,9 @@ const (
 )
 
 const (
-	errNoXattr = ENODATA
+	errNoXAttr = ENODATA
 )
 
 func init() {
-	errnoNames[errNoXattr] = "ENODATA"
+	errnoNames[errNoXAttr] = "ENODATA"
 }

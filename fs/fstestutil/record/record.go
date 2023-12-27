@@ -114,25 +114,25 @@ func (r *RequestRecorder) Recorded() fuse.Request {
 	return val.(fuse.Request)
 }
 
-// Setattrs records a Setattr request and its fields.
-type Setattrs struct {
+// SetAttrs records a SetAttr request and its fields.
+type SetAttrs struct {
 	rec RequestRecorder
 }
 
-var _ fs.NodeSetattrer = (*Setattrs)(nil)
+var _ fs.NodeSetAttrer = (*SetAttrs)(nil)
 
-func (r *Setattrs) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+func (r *SetAttrs) SetAttr(ctx context.Context, req *fuse.SetAttrRequest, resp *fuse.SetAttrResponse) error {
 	tmp := *req
 	r.rec.RecordRequest(&tmp)
 	return nil
 }
 
-func (r *Setattrs) RecordedSetattr() fuse.SetattrRequest {
+func (r *SetAttrs) RecordedSetAttr() fuse.SetAttrRequest {
 	val := r.rec.Recorded()
 	if val == nil {
-		return fuse.SetattrRequest{}
+		return fuse.SetAttrRequest{}
 	}
-	return *(val.(*fuse.SetattrRequest))
+	return *(val.(*fuse.SetAttrRequest))
 }
 
 // Fsyncs records an Fsync request and its fields.
@@ -281,66 +281,66 @@ func (r *Opens) RecordedOpen() fuse.OpenRequest {
 	return *(val.(*fuse.OpenRequest))
 }
 
-// Getxattrs records a Getxattr request and its fields.
-type Getxattrs struct {
+// GetXAttrs records a GetXAttr request and its fields.
+type GetXAttrs struct {
 	rec RequestRecorder
 }
 
-var _ fs.NodeGetxattrer = (*Getxattrs)(nil)
+var _ fs.NodeGetXAttrer = (*GetXAttrs)(nil)
 
-// Getxattr records the request and returns an error. Most callers should
+// GetXAttr records the request and returns an error. Most callers should
 // wrap this call in a function that returns a more useful result.
-func (r *Getxattrs) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+func (r *GetXAttrs) GetXAttr(ctx context.Context, req *fuse.GetXAttrRequest, resp *fuse.GetXAttrResponse) error {
 	tmp := *req
 	r.rec.RecordRequest(&tmp)
-	return fuse.ErrNoXattr
+	return fuse.ErrNoXAttr
 }
 
-// RecordedGetxattr returns information about the Getxattr request.
+// RecordedGetXAttr returns information about the GetXAttr request.
 // If no request was seen, returns a zero value.
-func (r *Getxattrs) RecordedGetxattr() fuse.GetxattrRequest {
+func (r *GetXAttrs) RecordedGetXAttr() fuse.GetXAttrRequest {
 	val := r.rec.Recorded()
 	if val == nil {
-		return fuse.GetxattrRequest{}
+		return fuse.GetXAttrRequest{}
 	}
-	return *(val.(*fuse.GetxattrRequest))
+	return *(val.(*fuse.GetXAttrRequest))
 }
 
-// Listxattrs records a Listxattr request and its fields.
-type Listxattrs struct {
+// ListXAttrs records a ListXAttr request and its fields.
+type ListXAttrs struct {
 	rec RequestRecorder
 }
 
-var _ fs.NodeListxattrer = (*Listxattrs)(nil)
+var _ fs.NodeListXAttrer = (*ListXAttrs)(nil)
 
-// Listxattr records the request and returns an error. Most callers should
+// ListXAttr records the request and returns an error. Most callers should
 // wrap this call in a function that returns a more useful result.
-func (r *Listxattrs) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+func (r *ListXAttrs) ListXAttr(ctx context.Context, req *fuse.ListXAttrRequest, resp *fuse.ListXAttrResponse) error {
 	tmp := *req
 	r.rec.RecordRequest(&tmp)
-	return fuse.ErrNoXattr
+	return fuse.ErrNoXAttr
 }
 
-// RecordedListxattr returns information about the Listxattr request.
+// RecordedListXAttr returns information about the ListXAttr request.
 // If no request was seen, returns a zero value.
-func (r *Listxattrs) RecordedListxattr() fuse.ListxattrRequest {
+func (r *ListXAttrs) RecordedListXAttr() fuse.ListXAttrRequest {
 	val := r.rec.Recorded()
 	if val == nil {
-		return fuse.ListxattrRequest{}
+		return fuse.ListXAttrRequest{}
 	}
-	return *(val.(*fuse.ListxattrRequest))
+	return *(val.(*fuse.ListXAttrRequest))
 }
 
-// Setxattrs records a Setxattr request and its fields.
-type Setxattrs struct {
+// SetXAttrs records a SetXAttr request and its fields.
+type SetXAttrs struct {
 	rec RequestRecorder
 }
 
-var _ fs.NodeSetxattrer = (*Setxattrs)(nil)
+var _ fs.NodeSetXAttrer = (*SetXAttrs)(nil)
 
-// Setxattr records the request and returns an error. Most callers should
+// SetXAttr records the request and returns an error. Most callers should
 // wrap this call in a function that returns a more useful result.
-func (r *Setxattrs) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error {
+func (r *SetXAttrs) SetXAttr(ctx context.Context, req *fuse.SetXAttrRequest) error {
 	tmp := *req
 	// The byte slice points to memory that will be reused, so make a
 	// deep copy.
@@ -349,39 +349,39 @@ func (r *Setxattrs) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) err
 	return nil
 }
 
-// RecordedSetxattr returns information about the Setxattr request.
+// RecordedSetXAttr returns information about the SetXAttr request.
 // If no request was seen, returns a zero value.
-func (r *Setxattrs) RecordedSetxattr() fuse.SetxattrRequest {
+func (r *SetXAttrs) RecordedSetXAttr() fuse.SetXAttrRequest {
 	val := r.rec.Recorded()
 	if val == nil {
-		return fuse.SetxattrRequest{}
+		return fuse.SetXAttrRequest{}
 	}
-	return *(val.(*fuse.SetxattrRequest))
+	return *(val.(*fuse.SetXAttrRequest))
 }
 
-// Removexattrs records a Removexattr request and its fields.
-type Removexattrs struct {
+// RemoveXAttrs records a RemoveXAttr request and its fields.
+type RemoveXAttrs struct {
 	rec RequestRecorder
 }
 
-var _ fs.NodeRemovexattrer = (*Removexattrs)(nil)
+var _ fs.NodeRemoveXAttrer = (*RemoveXAttrs)(nil)
 
-// Removexattr records the request and returns an error. Most callers should
+// RemoveXAttr records the request and returns an error. Most callers should
 // wrap this call in a function that returns a more useful result.
-func (r *Removexattrs) Removexattr(ctx context.Context, req *fuse.RemovexattrRequest) error {
+func (r *RemoveXAttrs) RemoveXAttr(ctx context.Context, req *fuse.RemoveXAttrRequest) error {
 	tmp := *req
 	r.rec.RecordRequest(&tmp)
 	return nil
 }
 
-// RecordedRemovexattr returns information about the Removexattr request.
+// RecordedRemoveXAttr returns information about the RemoveXAttr request.
 // If no request was seen, returns a zero value.
-func (r *Removexattrs) RecordedRemovexattr() fuse.RemovexattrRequest {
+func (r *RemoveXAttrs) RecordedRemoveXAttr() fuse.RemoveXAttrRequest {
 	val := r.rec.Recorded()
 	if val == nil {
-		return fuse.RemovexattrRequest{}
+		return fuse.RemoveXAttrRequest{}
 	}
-	return *(val.(*fuse.RemovexattrRequest))
+	return *(val.(*fuse.RemoveXAttrRequest))
 }
 
 // Creates records a Create request and its fields.

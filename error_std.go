@@ -10,7 +10,7 @@ package fuse
 // ENOATTR is not in any of the standards, ENODATA exists but is only
 // used for STREAMs.
 //
-// Each platform will define it a errNoXattr constant, and this file
+// Each platform will define it a errNoXAttr constant, and this file
 // will enforce that it implements the right interfaces and hide the
 // implementation.
 //
@@ -20,11 +20,13 @@ package fuse
 // http://www.freebsd.org/cgi/man.cgi?query=extattr_get_file&sektion=2
 // http://nixdoc.net/man-pages/openbsd/man2/extattr_get_file.2.html
 
-// ErrNoXattr is a platform-independent error value meaning the
+// ErrNoXAttr is a platform-independent error value meaning the
 // extended attribute was not found. It can be used to respond to
-// GetxattrRequest and such.
-const ErrNoXattr = errNoXattr
+// GetXAttrRequest and such.
+const ErrNoXAttr = errNoXAttr
 
-var _ error = ErrNoXattr
-var _ Errno = ErrNoXattr
-var _ ErrorNumber = ErrNoXattr
+var _ error = ErrNoXAttr
+
+//var _ Errno = ErrNoXAttr
+
+//var _ ErrorNumber = ErrNoXAttr

@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	"bazil.org/fuse/fs/fstestutil"
@@ -28,7 +30,6 @@ import (
 	"bazil.org/fuse/fs/fstestutil/spawntest"
 	"bazil.org/fuse/fs/fstestutil/spawntest/httpjson"
 	"bazil.org/fuse/fuseutil"
-	"golang.org/x/sys/unix"
 )
 
 func maybeParallel(t *testing.T) {
@@ -39,9 +40,9 @@ var helpers spawntest.Registry
 
 // TO TEST:
 //	Lookup(*LookupRequest, *LookupResponse)
-//	Getattr(*GetattrRequest, *GetattrResponse)
+//	GetAttr(*GetAttrRequest, *GetAttrResponse)
 //	Attr with explicit inode
-//	Setattr(*SetattrRequest, *SetattrResponse)
+//	SetAttr(*SetAttrRequest, *SetAttrResponse)
 //	Access(*AccessRequest)
 //	Open(*OpenRequest, *OpenResponse)
 //	Write(*WriteRequest, *WriteResponse)
@@ -804,12 +805,12 @@ func TestWriteLarge(t *testing.T) {
 	}
 }
 
-// Test Write calling Setattr+Write+Flush.
+// Test Write calling SetAttr+Write+Flush.
 
 type writeTruncateFlush struct {
 	fstestutil.File
 	record.Writes
-	record.Setattrs
+	record.SetAttrs
 	record.Flushes
 }
 
@@ -848,11 +849,11 @@ func TestWriteTruncateFlush(t *testing.T) {
 	if err := control.JSON("/").Call(ctx, req, &nothing); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
-	if w.RecordedSetattr() == (fuse.SetattrRequest{}) {
-		t.Errorf("writeTruncateFlush expected Setattr")
+	if w.RecordedSetAttr() == (fuse.SetAttrRequest{}) {
+		t.Errorf("writeTruncateFlush expected SetAttr")
 	}
 	if !w.RecordedFlush() {
-		t.Errorf("writeTruncateFlush expected Setattr")
+		t.Errorf("writeTruncateFlush expected SetAttr")
 	}
 	if got := string(w.RecordedWriteData()); got != hi {
 		t.Errorf("writeTruncateFlush = %q, want %q", got, hi)
@@ -987,7 +988,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// Test Create + Write + Remove
+// Test Create + Write + Rmdir
 
 type create3file struct {
 	fstestutil.File
@@ -1017,7 +1018,7 @@ func (f *create3) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	return nil, syscall.ENOENT
 }
 
-func (f *create3) Remove(ctx context.Context, r *fuse.RemoveRequest) error {
+func (f *create3) Rmdir(ctx context.Context, r *fuse.RmdirRequest) error {
 	if f.fooCreated.Recorded() && !f.fooRemoved.Recorded() &&
 		r.Name == "foo" && !r.Dir {
 		f.fooRemoved.Mark()
@@ -1031,10 +1032,10 @@ func doCreateWriteRemove(ctx context.Context, path string) (*struct{}, error) {
 		return nil, fmt.Errorf("WriteFile: %v", err)
 	}
 	if err := os.Remove(path); err != nil {
-		return nil, fmt.Errorf("Remove: %v", err)
+		return nil, fmt.Errorf("Rmdir: %v", err)
 	}
 	if err := os.Remove(path); !errors.Is(err, syscall.ENOENT) {
-		return nil, fmt.Errorf("second Remove: wrong error: %v", err)
+		return nil, fmt.Errorf("second Rmdir: wrong error: %v", err)
 	}
 	return &struct{}{}, nil
 }
@@ -1649,7 +1650,7 @@ func TestDeadline(t *testing.T) {
 
 type truncate struct {
 	fstestutil.File
-	record.Setattrs
+	record.SetAttrs
 }
 
 type truncateRequest struct {
@@ -1688,14 +1689,14 @@ func testTruncate(t *testing.T, toSize int64) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	gotr := f.RecordedSetattr()
-	if gotr == (fuse.SetattrRequest{}) {
-		t.Fatalf("no recorded SetattrRequest")
+	gotr := f.RecordedSetAttr()
+	if gotr == (fuse.SetAttrRequest{}) {
+		t.Fatalf("no recorded SetAttrRequest")
 	}
 	if g, e := gotr.Size, uint64(toSize); g != e {
 		t.Errorf("got Size = %q; want %q", g, e)
 	}
-	if g, e := gotr.Valid&^fuse.SetattrLockOwner, fuse.SetattrSize; g != e {
+	if g, e := gotr.Valid&^fuse.SetAttrLockOwner, fuse.SetAttrSize; g != e {
 		t.Errorf("got Valid = %q; want %q", g, e)
 	}
 	t.Logf("Got request: %#v", gotr)
@@ -1710,7 +1711,7 @@ func TestTruncate(t *testing.T) {
 
 type ftruncate struct {
 	fstestutil.File
-	record.Setattrs
+	record.SetAttrs
 }
 
 func doFtruncate(ctx context.Context, req truncateRequest) (*struct{}, error) {
@@ -1749,14 +1750,14 @@ func testFtruncate(t *testing.T, toSize int64) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	gotr := f.RecordedSetattr()
-	if gotr == (fuse.SetattrRequest{}) {
-		t.Fatalf("no recorded SetattrRequest")
+	gotr := f.RecordedSetAttr()
+	if gotr == (fuse.SetAttrRequest{}) {
+		t.Fatalf("no recorded SetAttrRequest")
 	}
 	if g, e := gotr.Size, uint64(toSize); g != e {
 		t.Errorf("got Size = %q; want %q", g, e)
 	}
-	if g, e := gotr.Valid&^fuse.SetattrLockOwner, fuse.SetattrHandle|fuse.SetattrSize; g != e {
+	if g, e := gotr.Valid&^fuse.SetAttrLockOwner, fuse.SetAttrHandle|fuse.SetAttrSize; g != e {
 		t.Errorf("got Valid = %q; want %q", g, e)
 	}
 	t.Logf("Got request: %#v", gotr)
@@ -1771,7 +1772,7 @@ func TestFtruncate(t *testing.T) {
 
 type truncateWithOpen struct {
 	fstestutil.File
-	record.Setattrs
+	record.SetAttrs
 }
 
 func doTruncateWithOpen(ctx context.Context, path string) (*struct{}, error) {
@@ -1803,9 +1804,9 @@ func TestTruncateWithOpen(t *testing.T) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	gotr := f.RecordedSetattr()
-	if gotr == (fuse.SetattrRequest{}) {
-		t.Fatalf("no recorded SetattrRequest")
+	gotr := f.RecordedSetAttr()
+	if gotr == (fuse.SetAttrRequest{}) {
+		t.Fatalf("no recorded SetAttrRequest")
 	}
 	if g, e := gotr.Size, uint64(0); g != e {
 		t.Errorf("got Size = %q; want %q", g, e)
@@ -1816,9 +1817,9 @@ func TestTruncateWithOpen(t *testing.T) {
 		// detect if Linux starts adding it. I assume the logic is
 		// something like the truncate happens before the open; or it
 		// just slipped by.
-		got &^= fuse.SetattrHandle
+		got &^= fuse.SetAttrHandle
 	}
-	if g, e := got&^fuse.SetattrLockOwner, fuse.SetattrSize; g != e {
+	if g, e := got&^fuse.SetAttrLockOwner, fuse.SetAttrSize; g != e {
 		t.Errorf("got Valid = %q; want %q", g, e)
 	}
 	t.Logf("Got request: %#v", gotr)
@@ -2135,15 +2136,15 @@ func TestReadDirAllRewind(t *testing.T) {
 
 type chmod struct {
 	fstestutil.File
-	record.Setattrs
+	record.SetAttrs
 }
 
-func (f *chmod) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+func (f *chmod) SetAttr(ctx context.Context, req *fuse.SetAttrRequest, resp *fuse.SetAttrResponse) error {
 	if !req.Valid.Mode() {
 		log.Printf("setattr not a chmod: %v", req.Valid)
 		return syscall.EIO
 	}
-	f.Setattrs.Setattr(ctx, req, resp)
+	f.SetAttrs.SetAttr(ctx, req, resp)
 	return nil
 }
 
@@ -2183,7 +2184,7 @@ func TestChmod(t *testing.T) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	got := f.RecordedSetattr()
+	got := f.RecordedSetAttr()
 	if g, e := got.Mode.Perm(), os.FileMode(0o764); g != e {
 		t.Errorf("wrong mode: %o %v != %o %v", g, g, e, e)
 	}
@@ -2227,7 +2228,7 @@ func TestChmodSticky(t *testing.T) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	got := f.RecordedSetattr()
+	got := f.RecordedSetAttr()
 	if g, e := got.Mode, os.FileMode(0o764)|os.ModeSticky; g != e {
 		t.Errorf("wrong mode: %o %v != %o %v", g, g, e, e)
 	}
@@ -2400,36 +2401,36 @@ func TestFsyncDir(t *testing.T) {
 	}
 }
 
-// Test Getxattr
+// Test GetXAttr
 
-type getxattr struct {
+type getXAttr struct {
 	fstestutil.File
-	record.Getxattrs
+	record.GetXAttrs
 }
 
-func (f *getxattr) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
-	f.Getxattrs.Getxattr(ctx, req, resp)
+func (f *getXAttr) GetXAttr(ctx context.Context, req *fuse.GetXAttrRequest, resp *fuse.GetXAttrResponse) error {
+	f.GetXAttrs.GetXAttr(ctx, req, resp)
 	resp.Xattr = []byte("hello, world")
 	return nil
 }
 
-type getxattrRequest struct {
+type getXAttrRequest struct {
 	Path      string
 	Name      string
 	Size      int
 	WantErrno syscall.Errno
 }
 
-type getxattrResult struct {
+type getXAttrResult struct {
 	// only one of Data and Size is set
 
 	Data []byte
 	Size int
 }
 
-func doGetxattr(ctx context.Context, req getxattrRequest) (*getxattrResult, error) {
+func doGetXAttr(ctx context.Context, req getXAttrRequest) (*getXAttrResult, error) {
 	buf := make([]byte, req.Size)
-	n, err := unix.Getxattr(req.Path, req.Name, buf)
+	n, err := unix.GetXAttr(req.Path, req.Name, buf)
 	if req.WantErrno != 0 {
 		if !errors.Is(err, req.WantErrno) {
 			return nil, fmt.Errorf("wrong error: %v", err)
@@ -2440,153 +2441,153 @@ func doGetxattr(ctx context.Context, req getxattrRequest) (*getxattrResult, erro
 		return nil, fmt.Errorf("unexpected error: %v", err)
 	}
 	if req.Size == 0 {
-		r := &getxattrResult{
+		r := &getXAttrResult{
 			Size: n,
 		}
 		return r, nil
 	}
-	r := &getxattrResult{
+	r := &getXAttrResult{
 		Data: buf[:n],
 	}
 	return r, nil
 }
 
-var getxattrHelper = helpers.Register("getxattr", httpjson.ServePOST(doGetxattr))
+var getXAttrHelper = helpers.Register("getXAttr", httpjson.ServePOST(doGetXAttr))
 
-func TestGetxattr(t *testing.T) {
+func TestGetXAttr(t *testing.T) {
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &getxattr{}
+	f := &getXAttr{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := getxattrHelper.Spawn(ctx, t)
+	control := getXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := getxattrRequest{
+	req := getXAttrRequest{
 		Path: mnt.Dir + "/child",
-		Name: "user.dummyxattr",
+		Name: "user.dummyXAttr",
 		Size: 8192,
 	}
-	var res getxattrResult
+	var res getXAttrResult
 	if err := control.JSON("/").Call(ctx, req, &res); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
 	if g, e := string(res.Data), "hello, world"; g != e {
-		t.Errorf("wrong getxattr content: %#v != %#v", g, e)
+		t.Errorf("wrong getXAttr content: %#v != %#v", g, e)
 	}
-	seen := f.RecordedGetxattr()
-	if g, e := seen.Name, "user.dummyxattr"; g != e {
-		t.Errorf("wrong getxattr name: %#v != %#v", g, e)
+	seen := f.RecordedGetXAttr()
+	if g, e := seen.Name, "user.dummyXAttr"; g != e {
+		t.Errorf("wrong getXAttr name: %#v != %#v", g, e)
 	}
 }
 
-// Test Getxattr that has no space to return value
+// Test GetXAttr that has no space to return value
 
-type getxattrTooSmall struct {
+type getXAttrTooSmall struct {
 	fstestutil.File
 }
 
-func (f *getxattrTooSmall) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+func (f *getXAttrTooSmall) GetXAttr(ctx context.Context, req *fuse.GetXAttrRequest, resp *fuse.GetXAttrResponse) error {
 	resp.Xattr = []byte("hello, world")
 	return nil
 }
 
-func TestGetxattrTooSmall(t *testing.T) {
+func TestGetXAttrTooSmall(t *testing.T) {
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &getxattrTooSmall{}
+	f := &getXAttrTooSmall{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := getxattrHelper.Spawn(ctx, t)
+	control := getXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := getxattrRequest{
+	req := getXAttrRequest{
 		Path:      mnt.Dir + "/child",
-		Name:      "user.dummyxattr",
+		Name:      "user.dummyXAttr",
 		Size:      3,
 		WantErrno: syscall.ERANGE,
 	}
-	var res getxattrResult
+	var res getXAttrResult
 	if err := control.JSON("/").Call(ctx, req, &res); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
 }
 
-// Test Getxattr used to probe result size
+// Test GetXAttr used to probe result size
 
-type getxattrSize struct {
+type getXAttrSize struct {
 	fstestutil.File
 }
 
-func (f *getxattrSize) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+func (f *getXAttrSize) GetXAttr(ctx context.Context, req *fuse.GetXAttrRequest, resp *fuse.GetXAttrResponse) error {
 	resp.Xattr = []byte("hello, world")
 	return nil
 }
 
-func TestGetxattrSize(t *testing.T) {
+func TestGetXAttrSize(t *testing.T) {
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &getxattrSize{}
+	f := &getXAttrSize{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := getxattrHelper.Spawn(ctx, t)
+	control := getXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := getxattrRequest{
+	req := getXAttrRequest{
 		Path: mnt.Dir + "/child",
-		Name: "user.dummyxattr",
+		Name: "user.dummyXAttr",
 		Size: 0,
 	}
-	var res getxattrResult
+	var res getXAttrResult
 	if err := control.JSON("/").Call(ctx, req, &res); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
 	if g, e := res.Size, len("hello, world"); g != e {
-		t.Errorf("Getxattr incorrect size: %d != %d", g, e)
+		t.Errorf("GetXAttr incorrect size: %d != %d", g, e)
 	}
 }
 
-// Test Listxattr
+// Test ListXAttr
 
-type listxattr struct {
+type listXAttr struct {
 	fstestutil.File
-	record.Listxattrs
+	record.ListXAttrs
 }
 
-func (f *listxattr) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
-	f.Listxattrs.Listxattr(ctx, req, resp)
+func (f *listXAttr) ListXAttr(ctx context.Context, req *fuse.ListXAttrRequest, resp *fuse.ListXAttrResponse) error {
+	f.ListXAttrs.ListXAttr(ctx, req, resp)
 	resp.Append("user.one", "user.two")
 	return nil
 }
 
-type listxattrRequest struct {
+type listXAttrRequest struct {
 	Path      string
 	Size      int
 	WantErrno syscall.Errno
 }
 
-type listxattrResult struct {
+type listXAttrResult struct {
 	// only one of Data and Size is set
 
 	Data []byte
 	Size int
 }
 
-func doListxattr(ctx context.Context, req listxattrRequest) (*listxattrResult, error) {
+func doListXAttr(ctx context.Context, req listXAttrRequest) (*listXAttrResult, error) {
 	buf := make([]byte, req.Size)
-	n, err := unix.Listxattr(req.Path, buf)
+	n, err := unix.ListXAttr(req.Path, buf)
 	if req.WantErrno != 0 {
 		if !errors.Is(err, req.WantErrno) {
 			return nil, fmt.Errorf("wrong error: %v", err)
@@ -2597,7 +2598,7 @@ func doListxattr(ctx context.Context, req listxattrRequest) (*listxattrResult, e
 		return nil, fmt.Errorf("unexpected error: %v", err)
 	}
 	if req.Size == 0 {
-		r := &listxattrResult{
+		r := &listXAttrResult{
 			Size: n,
 		}
 		return r, nil
@@ -2605,7 +2606,7 @@ func doListxattr(ctx context.Context, req listxattrRequest) (*listxattrResult, e
 	buf = buf[:n]
 
 	if runtime.GOOS == "freebsd" {
-		// Normalize FreeBSD listxattr syscall response to the same
+		// Normalize FreeBSD listXAttr syscall response to the same
 		// zero-terminated format as others. This is just the
 		// client-side syscall; the FUSE interaction still uses the
 		// nil-terminated strings with namespace prefixes.
@@ -2623,182 +2624,182 @@ func doListxattr(ctx context.Context, req listxattrRequest) (*listxattrResult, e
 		buf = out
 	}
 
-	r := &listxattrResult{
+	r := &listXAttrResult{
 		Data: buf,
 	}
 	return r, nil
 }
 
-var listxattrHelper = helpers.Register("listxattr", httpjson.ServePOST(doListxattr))
+var listXAttrHelper = helpers.Register("listXAttr", httpjson.ServePOST(doListXAttr))
 
-func TestListxattr(t *testing.T) {
+func TestListXAttr(t *testing.T) {
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &listxattr{}
+	f := &listXAttr{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := listxattrHelper.Spawn(ctx, t)
+	control := listXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := listxattrRequest{
+	req := listXAttrRequest{
 		Path: mnt.Dir + "/child",
 		Size: 8192,
 	}
-	var res listxattrResult
+	var res listXAttrResult
 	if err := control.JSON("/").Call(ctx, req, &res); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
 	if g, e := string(res.Data), "user.one\x00user.two\x00"; g != e {
-		t.Errorf("wrong listxattr content: %#v != %#v", g, e)
+		t.Errorf("wrong listXAttr content: %#v != %#v", g, e)
 	}
 
-	want := fuse.ListxattrRequest{
+	want := fuse.ListXAttrRequest{
 		Size: 8192,
 	}
 	if runtime.GOOS == "freebsd" {
 		// FreeBSD seems to always probe the size for you, even when
 		// userspace passed a large enough buffer. This means two (or
-		// more, if the size keeps growing!) Listxattr FUSE requests,
+		// more, if the size keeps growing!) ListXAttr FUSE requests,
 		// with the last one likely having the perfect size (except
 		// when the size changed downward between the calls). Blargh.
 		want.Size = uint32(len("user.one\x00user.two\x00"))
 	}
-	if g, e := f.RecordedListxattr(), want; g != e {
-		t.Fatalf("listxattr saw %+v, want %+v", g, e)
+	if g, e := f.RecordedListXAttr(), want; g != e {
+		t.Fatalf("listXAttr saw %+v, want %+v", g, e)
 	}
 }
 
-// Test Listxattr that has no space to return value
+// Test ListXAttr that has no space to return value
 
-type listxattrTooSmall struct {
+type listXAttrTooSmall struct {
 	fstestutil.File
 }
 
-func (f *listxattrTooSmall) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+func (f *listXAttrTooSmall) ListXAttr(ctx context.Context, req *fuse.ListXAttrRequest, resp *fuse.ListXAttrResponse) error {
 	resp.Xattr = []byte("one\x00two\x00")
 	return nil
 }
 
-func TestListxattrTooSmall(t *testing.T) {
+func TestListXAttrTooSmall(t *testing.T) {
 	if runtime.GOOS == "freebsd" {
-		t.Skip("FreeBSD xattr list format is different and the kernel has intermediate buffer; can't drive FUSE requests directly from userspace")
+		t.Skip("FreeBSD XAttr list format is different and the kernel has intermediate buffer; can't drive FUSE requests directly from userspace")
 	}
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &listxattrTooSmall{}
+	f := &listXAttrTooSmall{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := listxattrHelper.Spawn(ctx, t)
+	control := listXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := listxattrRequest{
+	req := listXAttrRequest{
 		Path:      mnt.Dir + "/child",
 		Size:      3,
 		WantErrno: syscall.ERANGE,
 	}
-	var res listxattrResult
+	var res listXAttrResult
 	if err := control.JSON("/").Call(ctx, req, &res); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
 }
 
-// Test Listxattr used to probe result size
+// Test ListXAttr used to probe result size
 
-type listxattrSize struct {
+type listXAttrSize struct {
 	fstestutil.File
 }
 
-func (f *listxattrSize) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+func (f *listXAttrSize) ListXAttr(ctx context.Context, req *fuse.ListXAttrRequest, resp *fuse.ListXAttrResponse) error {
 	resp.Xattr = []byte("one\x00two\x00")
 	return nil
 }
 
-func TestListxattrSize(t *testing.T) {
+func TestListXAttrSize(t *testing.T) {
 	if runtime.GOOS == "freebsd" {
-		t.Skip("FreeBSD xattr list format is different and the kernel has intermediate buffer; can't drive FUSE requests directly from userspace")
+		t.Skip("FreeBSD XAttr list format is different and the kernel has intermediate buffer; can't drive FUSE requests directly from userspace")
 	}
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &listxattrSize{}
+	f := &listXAttrSize{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := listxattrHelper.Spawn(ctx, t)
+	control := listXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := listxattrRequest{
+	req := listXAttrRequest{
 		Path: mnt.Dir + "/child",
 		Size: 0,
 	}
-	var res listxattrResult
+	var res listXAttrResult
 	if err := control.JSON("/").Call(ctx, req, &res); err != nil {
 		t.Fatalf("calling helper: %v", err)
 	}
 	if g, e := res.Size, len("one\x00two\x00"); g != e {
-		t.Errorf("Listxattr incorrect size: %d != %d", g, e)
+		t.Errorf("ListXAttr incorrect size: %d != %d", g, e)
 	}
 }
 
-// Test Setxattr
+// Test SetXAttr
 
-type setxattr struct {
+type setXAttr struct {
 	fstestutil.File
-	record.Setxattrs
+	record.SetXAttrs
 }
 
-type setxattrRequest struct {
+type setXAttrRequest struct {
 	Path  string
 	Name  string
 	Data  []byte
 	Flags int
 }
 
-func doSetxattr(ctx context.Context, req setxattrRequest) (*struct{}, error) {
-	if err := unix.Setxattr(req.Path, req.Name, req.Data, req.Flags); err != nil {
+func doSetXAttr(ctx context.Context, req setXAttrRequest) (*struct{}, error) {
+	if err := unix.SetXAttr(req.Path, req.Name, req.Data, req.Flags); err != nil {
 		return nil, err
 	}
 	return &struct{}{}, nil
 }
 
-var setxattrHelper = helpers.Register("setxattr", httpjson.ServePOST(doSetxattr))
+var setXAttrHelper = helpers.Register("setXAttr", httpjson.ServePOST(doSetXAttr))
 
-func testSetxattr(t *testing.T, size int) {
+func testSetXAttr(t *testing.T, size int) {
 	const linux_XATTR_NAME_MAX = 64 * 1024
 	if size > linux_XATTR_NAME_MAX && runtime.GOOS == "linux" {
-		t.Skip("large xattrs are not supported by linux")
+		t.Skip("large XAttrs are not supported by linux")
 	}
 	if runtime.GOOS == "freebsd" && size > 135106 {
 		// no idea what that magic number is but it seems like a very
 		// repeatable exact cutoff for me
-		t.Skip("FreeBSD setxattr seems to hang on large values")
+		t.Skip("FreeBSD setXAttr seems to hang on large values")
 	}
 
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &setxattr{}
+	f := &setXAttr{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := setxattrHelper.Spawn(ctx, t)
+	control := setXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
 	const g = "hello, world"
 	greeting := strings.Repeat(g, size/len(g)+1)[:size]
-	req := setxattrRequest{
+	req := setXAttrRequest{
 		Path:  mnt.Dir + "/child",
 		Name:  "user.greeting",
 		Data:  []byte(greeting),
@@ -2809,64 +2810,64 @@ func testSetxattr(t *testing.T, size int) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	// fuse.SetxattrRequest contains a byte slice and thus cannot be
+	// fuse.SetXAttrRequest contains a byte slice and thus cannot be
 	// directly compared
-	got := f.RecordedSetxattr()
+	got := f.RecordedSetXAttr()
 
 	if g, e := got.Name, "user.greeting"; g != e {
-		t.Errorf("Setxattr incorrect name: %q != %q", g, e)
+		t.Errorf("SetXAttr incorrect name: %q != %q", g, e)
 	}
 
 	if g, e := got.Flags, uint32(0); g != e {
-		t.Errorf("Setxattr incorrect flags: %d != %d", g, e)
+		t.Errorf("SetXAttr incorrect flags: %d != %d", g, e)
 	}
 
 	if g, e := string(got.Xattr), greeting; g != e {
-		t.Errorf("Setxattr incorrect data: %q != %q", g, e)
+		t.Errorf("SetXAttr incorrect data: %q != %q", g, e)
 	}
 }
 
-func TestSetxattr(t *testing.T) {
-	t.Run("20", func(t *testing.T) { testSetxattr(t, 20) })
-	t.Run("64kB", func(t *testing.T) { testSetxattr(t, 64*1024) })
-	t.Run("16MB", func(t *testing.T) { testSetxattr(t, 16*1024*1024) })
+func TestSetXAttr(t *testing.T) {
+	t.Run("20", func(t *testing.T) { testSetXAttr(t, 20) })
+	t.Run("64kB", func(t *testing.T) { testSetXAttr(t, 64*1024) })
+	t.Run("16MB", func(t *testing.T) { testSetXAttr(t, 16*1024*1024) })
 }
 
-// Test Removexattr
+// Test RemoveXAttr
 
-type removexattr struct {
+type removeXAttr struct {
 	fstestutil.File
-	record.Removexattrs
+	record.RemoveXAttrs
 }
 
-type removexattrRequest struct {
+type removeXAttrRequest struct {
 	Path string
 	Name string
 }
 
-func doRemovexattr(ctx context.Context, req removexattrRequest) (*struct{}, error) {
-	if err := unix.Removexattr(req.Path, req.Name); err != nil {
+func doRemoveXAttr(ctx context.Context, req removeXAttrRequest) (*struct{}, error) {
+	if err := unix.RemoveXAttr(req.Path, req.Name); err != nil {
 		return nil, err
 	}
 	return &struct{}{}, nil
 }
 
-var removexattrHelper = helpers.Register("removexattr", httpjson.ServePOST(doRemovexattr))
+var removeXAttrHelper = helpers.Register("removeXAttr", httpjson.ServePOST(doRemoveXAttr))
 
-func TestRemovexattr(t *testing.T) {
+func TestRemoveXAttr(t *testing.T) {
 	maybeParallel(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	f := &removexattr{}
+	f := &removeXAttr{}
 	mnt, err := fstestutil.MountedT(t, fstestutil.SimpleFS{Node: &fstestutil.ChildMap{"child": f}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mnt.Close()
-	control := removexattrHelper.Spawn(ctx, t)
+	control := removeXAttrHelper.Spawn(ctx, t)
 	defer control.Close()
 
-	req := removexattrRequest{
+	req := removeXAttrRequest{
 		Path: mnt.Dir + "/child",
 		Name: "user.greeting",
 	}
@@ -2875,9 +2876,9 @@ func TestRemovexattr(t *testing.T) {
 		t.Fatalf("calling helper: %v", err)
 	}
 
-	want := fuse.RemovexattrRequest{Name: "user.greeting"}
-	if g, e := f.RecordedRemovexattr(), want; g != e {
-		t.Errorf("removexattr saw %v, want %v", g, e)
+	want := fuse.RemoveXAttrRequest{Name: "user.greeting"}
+	if g, e := f.RecordedRemoveXAttr(), want; g != e {
+		t.Errorf("removeXAttr saw %v, want %v", g, e)
 	}
 }
 
@@ -3172,7 +3173,7 @@ type directWrite struct {
 	record.Writes
 }
 
-// explicitly not defining Attr / Setattr and managing Size
+// explicitly not defining Attr / SetAttr and managing Size
 
 func (f *directWrite) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
 	// do not allow the kernel to use page cache
@@ -3577,7 +3578,7 @@ func TestInvalidateNodeDataInvalidatesData(t *testing.T) {
 
 	{
 		// explicitly don't cross the EOF, to trigger more edge cases
-		// (Linux will always do Getattr if you cross what it believes
+		// (Linux will always do GetAttr if you cross what it believes
 		// the EOF to be)
 		const bufSize = len(invalidateDataContent2) - 3
 		for i := 0; i < 10; i++ {

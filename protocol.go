@@ -44,12 +44,12 @@ func (a Protocol) HasReadWriteFlags() bool {
 	return true
 }
 
-// HasGetattrFlags returns whether GetattrRequest field Flags is
+// HasGetAttrFlags returns whether GetAttrRequest field Flags is
 // valid.
 //
 // Deprecated: Guaranteed to be true with our minimum supported
 // protocol version.
-func (a Protocol) HasGetattrFlags() bool {
+func (a Protocol) HasGetAttrFlags() bool {
 	return true
 }
 

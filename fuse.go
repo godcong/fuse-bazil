@@ -56,7 +56,7 @@
 //
 // The operation must not hold on to the request or response,
 // including any []byte fields such as WriteRequest.Data or
-// SetxattrRequest.Xattr.
+// SetXAttrRequest.Xattr.
 //
 // # Errors
 //
@@ -145,7 +145,7 @@ func (e *MountpointDoesNotExistError) Error() string {
 func Mount(dir string, options ...MountOption) (*Conn, error) {
 	conf := mountConfig{
 		options:   make(map[string]string),
-		initFlags: InitAsyncDIO | InitSetxattrExt,
+		initFlags: InitAsyncDIO | InitSetXAttrExt,
 	}
 	for _, option := range options {
 		if err := option(&conf); err != nil {
@@ -308,73 +308,73 @@ type ErrorNumber interface {
 
 // Deprecated: Return a syscall.Errno directly. See ToErrno for exact
 // rules.
-const (
-	// ENOSYS indicates that the call is not supported.
-	ENOSYS = Errno(syscall.ENOSYS)
-
-	// ESTALE is used by Serve to respond to violations of the FUSE protocol.
-	ESTALE = Errno(syscall.ESTALE)
-
-	ENOENT = Errno(syscall.ENOENT)
-	EIO    = Errno(syscall.EIO)
-	EPERM  = Errno(syscall.EPERM)
-
-	// EINTR indicates request was interrupted by an InterruptRequest.
-	// See also fs.Intr.
-	EINTR = Errno(syscall.EINTR)
-
-	ERANGE  = Errno(syscall.ERANGE)
-	ENOTSUP = Errno(syscall.ENOTSUP)
-	EEXIST  = Errno(syscall.EEXIST)
-)
+//const (
+//	// ENOSYS indicates that the call is not supported.
+//	ENOSYS = Errno(syscall.ENOSYS)
+//
+//	// ESTALE is used by Serve to respond to violations of the FUSE protocol.
+//	ESTALE = Errno(syscall.ESTALE)
+//
+//	ENOENT = Errno(syscall.ENOENT)
+//	EIO    = Errno(syscall.EIO)
+//	EPERM  = Errno(syscall.EPERM)
+//
+//	// EINTR indicates request was interrupted by an InterruptRequest.
+//	// See also fs.Intr.
+//	EINTR = Errno(syscall.EINTR)
+//
+//	ERANGE  = Errno(syscall.ERANGE)
+//	ENOTSUP = Errno(syscall.ENOTSUP)
+//	EEXIST  = Errno(syscall.EEXIST)
+//)
 
 // DefaultErrno is the errno used when error returned does not
 // implement ErrorNumber.
-const DefaultErrno = EIO
+const DefaultErrno = syscall.EIO
 
 var errnoNames = map[Errno]string{
-	ENOSYS:                      "ENOSYS",
-	ESTALE:                      "ESTALE",
-	ENOENT:                      "ENOENT",
-	EIO:                         "EIO",
-	EPERM:                       "EPERM",
-	EINTR:                       "EINTR",
-	EEXIST:                      "EEXIST",
-	Errno(syscall.ENAMETOOLONG): "ENAMETOOLONG",
+	syscall.ENOSYS:       "ENOSYS",
+	syscall.ESTALE:       "ESTALE",
+	syscall.ENOENT:       "ENOENT",
+	syscall.EIO:          "EIO",
+	syscall.EPERM:        "EPERM",
+	syscall.EINTR:        "EINTR",
+	syscall.EEXIST:       "EEXIST",
+	syscall.ENAMETOOLONG: "ENAMETOOLONG",
 }
 
 // Errno implements Error and ErrorNumber using a syscall.Errno.
-type Errno syscall.Errno
+type Errno = syscall.Errno
 
-var _ ErrorNumber = Errno(0)
-var _ error = Errno(0)
+//var _ ErrorNumber = Errno(0)
+//var _ error = Errno(0)
 
-func (e Errno) Errno() Errno {
-	return e
-}
+//func (e Errno) Errno() Errno {
+//	return e
+//}
+//
+//func (e Errno) String() string {
+//	return syscall.Errno(e).Error()
+//}
+//
+//func (e Errno) Error() string {
+//	return syscall.Errno(e).Error()
+//}
+//
+//// ErrnoName returns the short non-numeric identifier for this errno.
+//// For example, "EIO".
+//func (e Errno) ErrnoName() string {
+//	s := errnoNames[e]
+//	if s == "" {
+//		s = fmt.Sprint(e.Errno())
+//	}
+//	return s
+//}
 
-func (e Errno) String() string {
-	return syscall.Errno(e).Error()
-}
-
-func (e Errno) Error() string {
-	return syscall.Errno(e).Error()
-}
-
-// ErrnoName returns the short non-numeric identifier for this errno.
-// For example, "EIO".
-func (e Errno) ErrnoName() string {
-	s := errnoNames[e]
-	if s == "" {
-		s = fmt.Sprint(e.Errno())
-	}
-	return s
-}
-
-func (e Errno) MarshalText() ([]byte, error) {
-	s := e.ErrnoName()
-	return []byte(s), nil
-}
+//func (e Errno) MarshalText() ([]byte, error) {
+//	s := e.ErrnoName()
+//	return []byte(s), nil
+//}
 
 // ToErrno converts arbitrary errors to Errno.
 //
@@ -385,13 +385,14 @@ func (e Errno) MarshalText() ([]byte, error) {
 // If err unwraps to implement ErrorNumber, that is used.
 //
 // Finally, returns DefaultErrno.
-func ToErrno(err error) Errno {
-	if err, ok := err.(syscall.Errno); ok {
+func ToErrno(e error) Errno {
+	var err syscall.Errno
+	if errors.As(e, &err) {
 		return Errno(err)
 	}
-	var errnum ErrorNumber
-	if errors.As(err, &errnum) {
-		return Errno(errnum.Errno())
+	var errNum ErrorNumber
+	if errors.As(e, &errNum) {
+		return Errno(errNum.Errno())
 	}
 	return DefaultErrno
 }
@@ -544,8 +545,8 @@ func (c *Conn) Close() error {
 }
 
 // caller must hold wio or rio
-func (c *Conn) fd() int {
-	return int(c.dev.Fd())
+func (c *Conn) fd() syscall.Handle {
+	return syscall.Handle(c.dev.Fd())
 }
 
 func (c *Conn) Protocol() Protocol {
@@ -566,9 +567,9 @@ func (c *Conn) Features() InitFlags {
 func (c *Conn) ReadRequest() (Request, error) {
 	m := getMessage(c)
 	c.rio.RLock()
-	n, err := syscall.Read(c.fd(), m.buf)
+	n, err := syscall.Read(syscall.Handle(c.fd()), m.buf)
 	c.rio.RUnlock()
-	if err != nil && err != syscall.ENODEV {
+	if err != nil && !errors.Is(err, syscall.ENODEV) {
 		putMessage(m)
 		return nil, err
 	}
@@ -627,10 +628,10 @@ func (c *Conn) ReadRequest() (Request, error) {
 			N:      in.Nlookup,
 		}
 
-	case opGetattr:
+	case opGetAttr:
 		switch {
 		case c.proto.LT(Protocol{7, 9}):
-			req = &GetattrRequest{
+			req = &GetAttrRequest{
 				Header: m.Header(),
 			}
 
@@ -639,21 +640,21 @@ func (c *Conn) ReadRequest() (Request, error) {
 			if m.len() < unsafe.Sizeof(*in) {
 				goto corrupt
 			}
-			req = &GetattrRequest{
+			req = &GetAttrRequest{
 				Header: m.Header(),
-				Flags:  GetattrFlags(in.GetattrFlags),
+				Flags:  GetAttrFlags(in.GetAttrFlags),
 				Handle: HandleID(in.Fh),
 			}
 		}
 
-	case opSetattr:
+	case opSetAttr:
 		in := (*setattrIn)(m.data())
 		if m.len() < unsafe.Sizeof(*in) {
 			goto corrupt
 		}
-		req = &SetattrRequest{
+		req = &SetAttrRequest{
 			Header: m.Header(),
-			Valid:  SetattrValid(in.Valid),
+			Valid:  SetAttrValid(in.Valid),
 			Handle: HandleID(in.Fh),
 			Size:   in.Size,
 			Atime:  time.Unix(int64(in.Atime), int64(in.AtimeNsec)),
@@ -751,18 +752,26 @@ func (c *Conn) ReadRequest() (Request, error) {
 		}
 		req = r
 
-	case opUnlink, opRmdir:
+	case opRmdir:
 		buf := m.bytes()
 		n := len(buf)
 		if n == 0 || buf[n-1] != '\x00' {
 			goto corrupt
 		}
-		req = &RemoveRequest{
+		req = &RmdirRequest{
 			Header: m.Header(),
 			Name:   string(buf[:n-1]),
-			Dir:    m.hdr.Opcode == opRmdir,
 		}
-
+	case opUnlink:
+		buf := m.bytes()
+		n := len(buf)
+		if n == 0 || buf[n-1] != '\x00' {
+			goto corrupt
+		}
+		req = &UnlinkRequest{
+			Header: m.Header(),
+			Name:   string(buf[:n-1]),
+		}
 	case opRename:
 		in := (*renameIn)(m.data())
 		if m.len() < unsafe.Sizeof(*in) {
@@ -873,36 +882,36 @@ func (c *Conn) ReadRequest() (Request, error) {
 			Flags:  in.FsyncFlags,
 		}
 
-	case opSetxattr:
-		size := setxattrInSize(c.flags)
+	case opSetXAttr:
+		size := setXAttrInSize(c.flags)
 		if m.len() < size {
 			goto corrupt
 		}
-		in := (*setxattrIn)(m.data())
+		in := (*setXAttrIn)(m.data())
 		m.off += int(size)
 		name := m.bytes()
 		i := bytes.IndexByte(name, '\x00')
 		if i < 0 {
 			goto corrupt
 		}
-		xattr := name[i+1:]
-		if uint32(len(xattr)) < in.Size {
+		XAttr := name[i+1:]
+		if uint32(len(XAttr)) < in.Size {
 			goto corrupt
 		}
-		xattr = xattr[:in.Size]
-		r := &SetxattrRequest{
+		XAttr = XAttr[:in.Size]
+		r := &SetXAttrRequest{
 			Header: m.Header(),
 			Flags:  in.Flags,
 			Name:   string(name[:i]),
-			Xattr:  xattr,
+			Xattr:  XAttr,
 		}
 		if c.proto.GE(Protocol{7, 32}) {
-			r.SetxattrFlags = SetxattrFlags(in.SetxattrFlags)
+			r.SetXAttrFlags = SetXAttrFlags(in.SetXAttrFlags)
 		}
 		req = r
 
-	case opGetxattr:
-		in := (*getxattrIn)(m.data())
+	case opGetXAttr:
+		in := (*getXAttrIn)(m.data())
 		if m.len() < unsafe.Sizeof(*in) {
 			goto corrupt
 		}
@@ -911,29 +920,29 @@ func (c *Conn) ReadRequest() (Request, error) {
 		if i < 0 {
 			goto corrupt
 		}
-		req = &GetxattrRequest{
+		req = &GetXAttrRequest{
 			Header: m.Header(),
 			Name:   string(name[:i]),
 			Size:   in.Size,
 		}
 
-	case opListxattr:
-		in := (*getxattrIn)(m.data())
+	case opListXAttr:
+		in := (*getXAttrIn)(m.data())
 		if m.len() < unsafe.Sizeof(*in) {
 			goto corrupt
 		}
-		req = &ListxattrRequest{
+		req = &ListXAttrRequest{
 			Header: m.Header(),
 			Size:   in.Size,
 		}
 
-	case opRemovexattr:
+	case opRemoveXAttr:
 		buf := m.bytes()
 		n := len(buf)
 		if n == 0 || buf[n-1] != '\x00' {
 			goto corrupt
 		}
-		req = &RemovexattrRequest{
+		req = &RemoveXAttrRequest{
 			Header: m.Header(),
 			Name:   string(buf[:n-1]),
 		}
@@ -1203,7 +1212,7 @@ var _ ErrorNumber = notCachedError{}
 func (notCachedError) Errno() Errno {
 	// Behave just like if the original syscall.ENOENT had been passed
 	// straight through.
-	return ENOENT
+	return syscall.ENOENT
 }
 
 var (
@@ -1611,21 +1620,21 @@ func (a *Attr) attr(out *attr, proto Protocol) {
 	}
 }
 
-// A GetattrRequest asks for the metadata for the file denoted by r.Node.
-type GetattrRequest struct {
+// A GetAttrRequest asks for the metadata for the file denoted by r.Node.
+type GetAttrRequest struct {
 	Header `json:"-"`
-	Flags  GetattrFlags
+	Flags  GetAttrFlags
 	Handle HandleID
 }
 
-var _ Request = (*GetattrRequest)(nil)
+var _ Request = (*GetAttrRequest)(nil)
 
-func (r *GetattrRequest) String() string {
-	return fmt.Sprintf("Getattr [%s] %v fl=%v", &r.Header, r.Handle, r.Flags)
+func (r *GetAttrRequest) String() string {
+	return fmt.Sprintf("GetAttr [%s] %v fl=%v", &r.Header, r.Handle, r.Flags)
 }
 
 // Respond replies to the request with the given response.
-func (r *GetattrRequest) Respond(resp *GetattrResponse) {
+func (r *GetAttrRequest) Respond(resp *GetAttrResponse) {
 	size := attrOutSize(r.Header.Conn.proto)
 	buf := newBuffer(size)
 	out := (*attrOut)(buf.alloc(size))
@@ -1635,17 +1644,17 @@ func (r *GetattrRequest) Respond(resp *GetattrResponse) {
 	r.respond(buf)
 }
 
-// A GetattrResponse is the response to a GetattrRequest.
-type GetattrResponse struct {
+// A GetAttrResponse is the response to a GetAttrRequest.
+type GetAttrResponse struct {
 	Attr Attr // file attributes
 }
 
-func (r *GetattrResponse) String() string {
-	return fmt.Sprintf("Getattr %v", r.Attr)
+func (r *GetAttrResponse) String() string {
+	return fmt.Sprintf("GetAttr %v", r.Attr)
 }
 
-// A GetxattrRequest asks for the extended attributes associated with r.Node.
-type GetxattrRequest struct {
+// A GetXAttrRequest asks for the extended attributes associated with r.Node.
+type GetXAttrRequest struct {
 	Header `json:"-"`
 
 	// Maximum size to return.
@@ -1655,17 +1664,17 @@ type GetxattrRequest struct {
 	Name string
 }
 
-var _ Request = (*GetxattrRequest)(nil)
+var _ Request = (*GetXAttrRequest)(nil)
 
-func (r *GetxattrRequest) String() string {
-	return fmt.Sprintf("Getxattr [%s] %q %d", &r.Header, r.Name, r.Size)
+func (r *GetXAttrRequest) String() string {
+	return fmt.Sprintf("GetXAttr [%s] %q %d", &r.Header, r.Name, r.Size)
 }
 
 // Respond replies to the request with the given response.
-func (r *GetxattrRequest) Respond(resp *GetxattrResponse) {
+func (r *GetXAttrRequest) Respond(resp *GetXAttrResponse) {
 	if r.Size == 0 {
-		buf := newBuffer(unsafe.Sizeof(getxattrOut{}))
-		out := (*getxattrOut)(buf.alloc(unsafe.Sizeof(getxattrOut{})))
+		buf := newBuffer(unsafe.Sizeof(getXAttrOut{}))
+		out := (*getXAttrOut)(buf.alloc(unsafe.Sizeof(getXAttrOut{})))
 		out.Size = uint32(len(resp.Xattr))
 		r.respond(buf)
 	} else {
@@ -1675,32 +1684,32 @@ func (r *GetxattrRequest) Respond(resp *GetxattrResponse) {
 	}
 }
 
-// A GetxattrResponse is the response to a GetxattrRequest.
-type GetxattrResponse struct {
+// A GetXAttrResponse is the response to a GetXAttrRequest.
+type GetXAttrResponse struct {
 	Xattr []byte
 }
 
-func (r *GetxattrResponse) String() string {
-	return fmt.Sprintf("Getxattr %q", r.Xattr)
+func (r *GetXAttrResponse) String() string {
+	return fmt.Sprintf("GetXAttr %q", r.Xattr)
 }
 
-// A ListxattrRequest asks to list the extended attributes associated with r.Node.
-type ListxattrRequest struct {
+// A ListXAttrRequest asks to list the extended attributes associated with r.Node.
+type ListXAttrRequest struct {
 	Header `json:"-"`
 	Size   uint32 // maximum size to return
 }
 
-var _ Request = (*ListxattrRequest)(nil)
+var _ Request = (*ListXAttrRequest)(nil)
 
-func (r *ListxattrRequest) String() string {
-	return fmt.Sprintf("Listxattr [%s] %d", &r.Header, r.Size)
+func (r *ListXAttrRequest) String() string {
+	return fmt.Sprintf("ListXAttr [%s] %d", &r.Header, r.Size)
 }
 
 // Respond replies to the request with the given response.
-func (r *ListxattrRequest) Respond(resp *ListxattrResponse) {
+func (r *ListXAttrRequest) Respond(resp *ListXAttrResponse) {
 	if r.Size == 0 {
-		buf := newBuffer(unsafe.Sizeof(getxattrOut{}))
-		out := (*getxattrOut)(buf.alloc(unsafe.Sizeof(getxattrOut{})))
+		buf := newBuffer(unsafe.Sizeof(getXAttrOut{}))
+		out := (*getXAttrOut)(buf.alloc(unsafe.Sizeof(getXAttrOut{})))
 		out.Size = uint32(len(resp.Xattr))
 		r.respond(buf)
 	} else {
@@ -1710,43 +1719,43 @@ func (r *ListxattrRequest) Respond(resp *ListxattrResponse) {
 	}
 }
 
-// A ListxattrResponse is the response to a ListxattrRequest.
-type ListxattrResponse struct {
+// A ListXAttrResponse is the response to a ListXAttrRequest.
+type ListXAttrResponse struct {
 	Xattr []byte
 }
 
-func (r *ListxattrResponse) String() string {
-	return fmt.Sprintf("Listxattr %q", r.Xattr)
+func (r *ListXAttrResponse) String() string {
+	return fmt.Sprintf("ListXAttr %q", r.Xattr)
 }
 
 // Append adds an extended attribute name to the response.
-func (r *ListxattrResponse) Append(names ...string) {
+func (r *ListXAttrResponse) Append(names ...string) {
 	for _, name := range names {
 		r.Xattr = append(r.Xattr, name...)
 		r.Xattr = append(r.Xattr, '\x00')
 	}
 }
 
-// A RemovexattrRequest asks to remove an extended attribute associated with r.Node.
-type RemovexattrRequest struct {
+// A RemoveXAttrRequest asks to remove an extended attribute associated with r.Node.
+type RemoveXAttrRequest struct {
 	Header `json:"-"`
 	Name   string // name of extended attribute
 }
 
-var _ Request = (*RemovexattrRequest)(nil)
+var _ Request = (*RemoveXAttrRequest)(nil)
 
-func (r *RemovexattrRequest) String() string {
-	return fmt.Sprintf("Removexattr [%s] %q", &r.Header, r.Name)
+func (r *RemoveXAttrRequest) String() string {
+	return fmt.Sprintf("RemoveXAttr [%s] %q", &r.Header, r.Name)
 }
 
 // Respond replies to the request, indicating that the attribute was removed.
-func (r *RemovexattrRequest) Respond() {
+func (r *RemoveXAttrRequest) Respond() {
 	buf := newBuffer(0)
 	r.respond(buf)
 }
 
-// A SetxattrRequest asks to set an extended attribute associated with a file.
-type SetxattrRequest struct {
+// A SetXAttrRequest asks to set an extended attribute associated with a file.
+type SetXAttrRequest struct {
 	Header `json:"-"`
 
 	// Flags can make the request fail if attribute does/not already
@@ -1760,14 +1769,14 @@ type SetxattrRequest struct {
 	// TODO XATTR_REPLACE and not exist -> ENODATA
 	Flags uint32
 
-	// FUSE-specific flags (as opposed to the flags from filesystem client `setxattr(2)` flags argument).
-	SetxattrFlags SetxattrFlags
+	// FUSE-specific flags (as opposed to the flags from filesystem client `setXAttr(2)` flags argument).
+	SetXAttrFlags SetXAttrFlags
 
 	Name  string
 	Xattr []byte
 }
 
-var _ Request = (*SetxattrRequest)(nil)
+var _ Request = (*SetXAttrRequest)(nil)
 
 func trunc(b []byte, max int) ([]byte, string) {
 	if len(b) > max {
@@ -1776,13 +1785,13 @@ func trunc(b []byte, max int) ([]byte, string) {
 	return b, ""
 }
 
-func (r *SetxattrRequest) String() string {
-	xattr, tail := trunc(r.Xattr, 16)
-	return fmt.Sprintf("Setxattr [%s] %q %q%s fl=%v", &r.Header, r.Name, xattr, tail, r.Flags)
+func (r *SetXAttrRequest) String() string {
+	XAttr, tail := trunc(r.Xattr, 16)
+	return fmt.Sprintf("SetXAttr [%s] %q %q%s fl=%v", &r.Header, r.Name, XAttr, tail, r.Flags)
 }
 
 // Respond replies to the request, indicating that the extended attribute was set.
-func (r *SetxattrRequest) Respond() {
+func (r *SetXAttrRequest) Respond() {
 	buf := newBuffer(0)
 	r.respond(buf)
 }
@@ -2098,7 +2107,7 @@ type Dirent struct {
 	// Type of the entry, for example DT_File.
 	//
 	// Setting this is optional. The zero value (DT_Unknown) means
-	// callers will just need to do a Getattr when the type is
+	// callers will just need to do a GetAttr when the type is
 	// needed. Providing a type can speed up operations
 	// significantly.
 	Type DirentType
@@ -2222,11 +2231,11 @@ func (r *WriteResponse) String() string {
 	return fmt.Sprintf("Write %d", r.Size)
 }
 
-// A SetattrRequest asks to change one or more attributes associated with a file,
+// A SetAttrRequest asks to change one or more attributes associated with a file,
 // as indicated by Valid.
-type SetattrRequest struct {
+type SetAttrRequest struct {
 	Header `json:"-"`
-	Valid  SetattrValid
+	Valid  SetAttrValid
 	Handle HandleID
 	Size   uint64
 	Atime  time.Time
@@ -2242,11 +2251,11 @@ type SetattrRequest struct {
 	Gid  uint32
 }
 
-var _ Request = (*SetattrRequest)(nil)
+var _ Request = (*SetAttrRequest)(nil)
 
-func (r *SetattrRequest) String() string {
+func (r *SetAttrRequest) String() string {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "Setattr [%s]", &r.Header)
+	fmt.Fprintf(&buf, "SetAttr [%s]", &r.Header)
 	if r.Valid.Mode() {
 		fmt.Fprintf(&buf, " mode=%v", r.Mode)
 	}
@@ -2284,7 +2293,7 @@ func (r *SetattrRequest) String() string {
 
 // Respond replies to the request with the given response,
 // giving the updated attributes.
-func (r *SetattrRequest) Respond(resp *SetattrResponse) {
+func (r *SetAttrRequest) Respond(resp *SetAttrResponse) {
 	size := attrOutSize(r.Header.Conn.proto)
 	buf := newBuffer(size)
 	out := (*attrOut)(buf.alloc(size))
@@ -2294,13 +2303,13 @@ func (r *SetattrRequest) Respond(resp *SetattrResponse) {
 	r.respond(buf)
 }
 
-// A SetattrResponse is the response to a SetattrRequest.
-type SetattrResponse struct {
+// A SetAttrResponse is the response to a SetAttrRequest.
+type SetAttrResponse struct {
 	Attr Attr // file attributes
 }
 
-func (r *SetattrResponse) String() string {
-	return fmt.Sprintf("Setattr %v", r.Attr)
+func (r *SetAttrResponse) String() string {
+	return fmt.Sprintf("SetAttr %v", r.Attr)
 }
 
 // A FlushRequest asks for the current state of an open file to be flushed
@@ -2326,22 +2335,40 @@ func (r *FlushRequest) Respond() {
 	r.respond(buf)
 }
 
-// A RemoveRequest asks to remove a file or directory from the
+// A RmdirRequest asks to remove a file or directory from the
 // directory r.Node.
-type RemoveRequest struct {
+type RmdirRequest struct {
 	Header `json:"-"`
 	Name   string // name of the entry to remove
-	Dir    bool   // is this rmdir?
 }
 
-var _ Request = (*RemoveRequest)(nil)
+var _ Request = (*RmdirRequest)(nil)
 
-func (r *RemoveRequest) String() string {
-	return fmt.Sprintf("Remove [%s] %q dir=%v", &r.Header, r.Name, r.Dir)
+func (r *RmdirRequest) String() string {
+	return fmt.Sprintf("Rmdir [%s] %q", &r.Header, r.Name)
 }
 
 // Respond replies to the request, indicating that the file was removed.
-func (r *RemoveRequest) Respond() {
+func (r *RmdirRequest) Respond() {
+	buf := newBuffer(0)
+	r.respond(buf)
+}
+
+// A UnlinkRequest asks to remove a file or directory from the
+// directory r.Node.
+type UnlinkRequest struct {
+	Header `json:"-"`
+	Name   string // name of the entry to remove
+}
+
+var _ Request = (*UnlinkRequest)(nil)
+
+func (r *UnlinkRequest) String() string {
+	return fmt.Sprintf("Unlink [%s] %q", &r.Header, r.Name)
+}
+
+// Respond replies to the request, indicating that the file was removed.
+func (r *UnlinkRequest) Respond() {
 	buf := newBuffer(0)
 	r.respond(buf)
 }
@@ -2644,7 +2671,7 @@ func (r *LockRequest) Respond() {
 // See LockRequest. LockWaitRequest can be converted to a LockRequest.
 type LockWaitRequest LockRequest
 
-var _ LockRequest = LockRequest(LockWaitRequest{})
+var _ = LockRequest(LockWaitRequest{})
 
 var _ Request = (*LockWaitRequest)(nil)
 
@@ -2664,7 +2691,7 @@ func (r *LockWaitRequest) Respond() {
 // See LockRequest. UnlockRequest can be converted to a LockRequest.
 type UnlockRequest LockRequest
 
-var _ LockRequest = LockRequest(UnlockRequest{})
+var _ = LockRequest(UnlockRequest{})
 
 var _ Request = (*UnlockRequest)(nil)
 

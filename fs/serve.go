@@ -63,8 +63,8 @@ type FSInodeGenerator interface {
 	// the inode to be set, and fewer duplicates in general makes UNIX
 	// tools work better.
 	//
-	// Operations where the nodes may return 0 inodes include Getattr,
-	// Setattr and ReadDir.
+	// Operations where the nodes may return 0 inodes include GetAttr,
+	// SetAttr and ReadDir.
 	//
 	// If FS does not implement FSInodeGenerator, GenerateDynamicInode
 	// is used.
@@ -77,194 +77,6 @@ type FSInodeGenerator interface {
 	GenerateInode(parentInode uint64, name string) uint64
 }
 
-// A Node is the interface required of a file or directory.
-// See the documentation for type FS for general information
-// pertaining to all methods.
-//
-// A Node must be usable as a map key, that is, it cannot be a
-// function, map or slice.
-//
-// Other FUSE requests can be handled by implementing methods from the
-// Node* interfaces, for example NodeOpener.
-//
-// Methods returning Node should take care to return the same Node
-// when the result is logically the same instance. Without this, each
-// Node will get a new NodeID, causing spurious cache invalidations,
-// extra lookups and aliasing anomalies. This may not matter for a
-// simple, read-only filesystem.
-type Node interface {
-	// Attr fills attr with the standard metadata for the node.
-	//
-	// Fields with reasonable defaults are prepopulated. For example,
-	// all times are set to a fixed moment when the program started.
-	//
-	// If Inode is left as 0, a dynamic inode number is chosen.
-	//
-	// The result may be cached for the duration set in Valid.
-	Attr(ctx context.Context, attr *fuse.Attr) error
-}
-
-type NodeGetattrer interface {
-	// Getattr obtains the standard metadata for the receiver.
-	// It should store that metadata in resp.
-	//
-	// If this method is not implemented, the attributes will be
-	// generated based on Attr(), with zero values filled in.
-	Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error
-}
-
-type NodeSetattrer interface {
-	// Setattr sets the standard metadata for the receiver.
-	//
-	// Note, this is also used to communicate changes in the size of
-	// the file, outside of Writes.
-	//
-	// req.Valid is a bitmask of what fields are actually being set.
-	// For example, the method should not change the mode of the file
-	// unless req.Valid.Mode() is true.
-	Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error
-}
-
-type NodeSymlinker interface {
-	// Symlink creates a new symbolic link in the receiver, which must be a directory.
-	//
-	// TODO is the above true about directories?
-	Symlink(ctx context.Context, req *fuse.SymlinkRequest) (Node, error)
-}
-
-// This optional request will be called only for symbolic link nodes.
-type NodeReadlinker interface {
-	// Readlink reads a symbolic link.
-	Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error)
-}
-
-type NodeLinker interface {
-	// Link creates a new directory entry in the receiver based on an
-	// existing Node. Receiver must be a directory.
-	Link(ctx context.Context, req *fuse.LinkRequest, old Node) (Node, error)
-}
-
-type NodeRemover interface {
-	// Remove removes the entry with the given name from
-	// the receiver, which must be a directory.  The entry to be removed
-	// may correspond to a file (unlink) or to a directory (rmdir).
-	Remove(ctx context.Context, req *fuse.RemoveRequest) error
-}
-
-type NodeAccesser interface {
-	// Access checks whether the calling context has permission for
-	// the given operations on the receiver. If so, Access should
-	// return nil. If not, Access should return EPERM.
-	//
-	// Note that this call affects the result of the access(2) system
-	// call but not the open(2) system call. If Access is not
-	// implemented, the Node behaves as if it always returns nil
-	// (permission granted), relying on checks in Open instead.
-	Access(ctx context.Context, req *fuse.AccessRequest) error
-}
-
-type NodeStringLookuper interface {
-	// Lookup looks up a specific entry in the receiver,
-	// which must be a directory.  Lookup should return a Node
-	// corresponding to the entry.  If the name does not exist in
-	// the directory, Lookup should return ENOENT.
-	//
-	// Lookup need not to handle the names "." and "..".
-	Lookup(ctx context.Context, name string) (Node, error)
-}
-
-type NodeRequestLookuper interface {
-	// Lookup looks up a specific entry in the receiver.
-	// See NodeStringLookuper for more.
-	Lookup(ctx context.Context, req *fuse.LookupRequest, resp *fuse.LookupResponse) (Node, error)
-}
-
-type NodeMkdirer interface {
-	Mkdir(ctx context.Context, req *fuse.MkdirRequest) (Node, error)
-}
-
-type NodeOpener interface {
-	// Open opens the receiver. After a successful open, a client
-	// process has a file descriptor referring to this Handle.
-	//
-	// Open can also be also called on non-files. For example,
-	// directories are Opened for ReadDir or fchdir(2).
-	//
-	// If this method is not implemented, the open will always
-	// succeed, and the Node itself will be used as the Handle.
-	//
-	// XXX note about access.  XXX OpenFlags.
-	Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (Handle, error)
-}
-
-type NodeCreater interface {
-	// Create creates a new directory entry in the receiver, which
-	// must be a directory.
-	Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (Node, Handle, error)
-}
-
-type NodeForgetter interface {
-	// Forget about this node. This node will not receive further
-	// method calls.
-	//
-	// Forget is not necessarily seen on unmount, as all nodes are
-	// implicitly forgotten as part of the unmount.
-	Forget()
-}
-
-type NodeRenamer interface {
-	Rename(ctx context.Context, req *fuse.RenameRequest, newDir Node) error
-}
-
-type NodeMknoder interface {
-	Mknod(ctx context.Context, req *fuse.MknodRequest) (Node, error)
-}
-
-// TODO this should be on Handle not Node
-type NodeFsyncer interface {
-	Fsync(ctx context.Context, req *fuse.FsyncRequest) error
-}
-
-type NodeGetxattrer interface {
-	// Getxattr gets an extended attribute by the given name from the
-	// node.
-	//
-	// If there is no xattr by that name, returns fuse.ErrNoXattr.
-	Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error
-}
-
-type NodeListxattrer interface {
-	// Listxattr lists the extended attributes recorded for the node.
-	Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error
-}
-
-type NodeSetxattrer interface {
-	// Setxattr sets an extended attribute with the given name and
-	// value for the node.
-	Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error
-}
-
-type NodeRemovexattrer interface {
-	// Removexattr removes an extended attribute for the name.
-	//
-	// If there is no xattr by that name, returns fuse.ErrNoXattr.
-	Removexattr(ctx context.Context, req *fuse.RemovexattrRequest) error
-}
-
-var startTime = time.Now()
-
-func nodeAttr(ctx context.Context, n Node, attr *fuse.Attr) error {
-	attr.Valid = attrValidTime
-	attr.Nlink = 1
-	attr.Atime = startTime
-	attr.Mtime = startTime
-	attr.Ctime = startTime
-	if err := n.Attr(ctx, attr); err != nil {
-		return err
-	}
-	return nil
-}
-
 // A Handle is the interface required of an opened file or directory.
 // See the documentation for type FS for general information
 // pertaining to all methods.
@@ -275,76 +87,6 @@ func nodeAttr(ctx context.Context, n Node, attr *fuse.Attr) error {
 //
 // TODO implement methods: Getlk, Setlk, Setlkw
 type Handle interface {
-}
-
-type HandleFlusher interface {
-	// Flush is called each time the file or directory is closed.
-	// Because there can be multiple file descriptors referring to a
-	// single opened file, Flush can be called multiple times.
-	Flush(ctx context.Context, req *fuse.FlushRequest) error
-}
-
-type HandleReadAller interface {
-	ReadAll(ctx context.Context) ([]byte, error)
-}
-
-type HandleReadDirAller interface {
-	ReadDirAll(ctx context.Context) ([]fuse.Dirent, error)
-}
-
-type HandleReader interface {
-	// Read requests to read data from the handle.
-	//
-	// Copy the response bytes to the byte slice resp.Data, slicing
-	// it shorter when needed.
-	//
-	// There is a page cache in the kernel that normally submits only
-	// page-aligned reads spanning one or more pages. However, you
-	// should not rely on this. To see individual requests as
-	// submitted by the file system clients, set OpenDirectIO.
-	//
-	// Note that reads beyond the size of the file as reported by Attr
-	// are not even attempted (except in OpenDirectIO mode).
-	Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error
-}
-
-type HandleWriter interface {
-	// Write requests to write data into the handle at the given offset.
-	// Store the amount of data written in resp.Size.
-	//
-	// There is a writeback page cache in the kernel that normally submits
-	// only page-aligned writes spanning one or more pages. However,
-	// you should not rely on this. To see individual requests as
-	// submitted by the file system clients, set OpenDirectIO.
-	//
-	// Writes that grow the file are expected to update the file size
-	// (as seen through Attr). Note that file size changes are
-	// communicated also through Setattr.
-	Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error
-}
-
-type HandleReleaser interface {
-	Release(ctx context.Context, req *fuse.ReleaseRequest) error
-}
-
-type HandlePoller interface {
-	// Poll checks whether the handle is currently ready for I/O, and
-	// may request a wakeup when it is.
-	//
-	// Poll should always return quickly. Clients waiting for
-	// readiness can be woken up by passing the return value of
-	// PollRequest.Wakeup to fs.Server.NotifyPollWakeup or
-	// fuse.Conn.NotifyPollWakeup.
-	//
-	// To allow supporting poll for only some of your Nodes/Handles,
-	// the default behavior is to report immediate readiness. If your
-	// FS does not support polling and you want to minimize needless
-	// requests and log noise, implement NodePoller and return
-	// syscall.ENOSYS.
-	//
-	// The Go runtime uses epoll-based I/O whenever possible, even for
-	// regular files.
-	Poll(ctx context.Context, req *fuse.PollRequest, resp *fuse.PollResponse) error
 }
 
 type NodePoller interface {
@@ -485,31 +227,31 @@ type Server struct {
 // Serve serves the FUSE connection by making calls to the methods
 // of fs and the Nodes and Handles it makes available.  It returns only
 // when the connection has been closed or an unexpected error occurs.
-func (s *Server) Serve(fs FS) error {
-	defer s.wg.Wait() // Wait for worker goroutines to complete before return
+func (srv *Server) Serve(fs FS) error {
+	defer srv.wg.Wait() // Wait for worker goroutines to complete before return
 
-	s.fs = fs
+	srv.fs = fs
 	if dyn, ok := fs.(FSInodeGenerator); ok {
-		s.dynamicInode = dyn.GenerateInode
+		srv.dynamicInode = dyn.GenerateInode
 	}
 
 	root, err := fs.Root()
 	if err != nil {
 		return fmt.Errorf("cannot obtain root node: %v", err)
 	}
-	// Recognize the root node if it's ever returned from Lookup,
+	// Recognize the root node if it'srv ever returned from Lookup,
 	// passed to Invalidate, etc.
-	s.nodeRef[root] = 1
-	s.node = append(s.node, nil, &serveNode{
+	srv.nodeRef[root] = 1
+	srv.node = append(srv.node, nil, &serveNode{
 		inode:      1,
-		generation: s.nodeGen,
+		generation: srv.nodeGen,
 		node:       root,
 		refs:       1,
 	})
-	s.handle = append(s.handle, nil)
+	srv.handle = append(srv.handle, nil)
 
 	for {
-		req, err := s.conn.ReadRequest()
+		req, err := srv.conn.ReadRequest()
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -517,10 +259,10 @@ func (s *Server) Serve(fs FS) error {
 			return err
 		}
 
-		s.wg.Add(1)
+		srv.wg.Add(1)
 		go func() {
-			defer s.wg.Done()
-			s.serve(req)
+			defer srv.wg.Done()
+			srv.serve(req)
 		}()
 	}
 	return nil
@@ -568,43 +310,43 @@ type serveHandle struct {
 	readData []byte
 }
 
-func (c *Server) saveNode(inode uint64, node Node) (id fuse.NodeID, gen uint64) {
-	c.meta.Lock()
-	defer c.meta.Unlock()
+func (srv *Server) saveNode(inode uint64, node Node) (id fuse.NodeID, gen uint64) {
+	srv.meta.Lock()
+	defer srv.meta.Unlock()
 
-	if id, ok := c.nodeRef[node]; ok {
-		sn := c.node[id]
+	if id, ok := srv.nodeRef[node]; ok {
+		sn := srv.node[id]
 		sn.refs++
 		return id, sn.generation
 	}
 
 	sn := &serveNode{inode: inode, node: node, refs: 1}
-	if n := len(c.freeNode); n > 0 {
-		id = c.freeNode[n-1]
-		c.freeNode = c.freeNode[:n-1]
-		c.node[id] = sn
-		c.nodeGen++
+	if n := len(srv.freeNode); n > 0 {
+		id = srv.freeNode[n-1]
+		srv.freeNode = srv.freeNode[:n-1]
+		srv.node[id] = sn
+		srv.nodeGen++
 	} else {
-		id = fuse.NodeID(len(c.node))
-		c.node = append(c.node, sn)
+		id = fuse.NodeID(len(srv.node))
+		srv.node = append(srv.node, sn)
 	}
-	sn.generation = c.nodeGen
-	c.nodeRef[node] = id
+	sn.generation = srv.nodeGen
+	srv.nodeRef[node] = id
 	return id, sn.generation
 }
 
-func (c *Server) saveHandle(handle Handle) (id fuse.HandleID) {
-	c.meta.Lock()
+func (srv *Server) saveHandle(handle Handle) (id fuse.HandleID) {
+	srv.meta.Lock()
 	shandle := &serveHandle{handle: handle}
-	if n := len(c.freeHandle); n > 0 {
-		id = c.freeHandle[n-1]
-		c.freeHandle = c.freeHandle[:n-1]
-		c.handle[id] = shandle
+	if n := len(srv.freeHandle); n > 0 {
+		id = srv.freeHandle[n-1]
+		srv.freeHandle = srv.freeHandle[:n-1]
+		srv.handle[id] = shandle
 	} else {
-		id = fuse.HandleID(len(c.handle))
-		c.handle = append(c.handle, shandle)
+		id = fuse.HandleID(len(srv.handle))
+		srv.handle = append(srv.handle, shandle)
 	}
-	c.meta.Unlock()
+	srv.meta.Unlock()
 	return
 }
 
@@ -621,16 +363,16 @@ func (n nodeRefcountDropBug) String() string {
 // dropNode decreases reference count for node with id by n.
 // If reference count dropped to zero, returns true.
 // Note that node is not guaranteed to be non-nil.
-func (c *Server) dropNode(id fuse.NodeID, n uint64) (node Node, forget bool) {
-	c.meta.Lock()
-	defer c.meta.Unlock()
-	snode := c.node[id]
+func (srv *Server) dropNode(id fuse.NodeID, n uint64) (node Node, forget bool) {
+	srv.meta.Lock()
+	defer srv.meta.Unlock()
+	snode := srv.node[id]
 
 	if snode == nil {
 		// this should only happen if refcounts kernel<->us disagree
 		// *and* two ForgetRequests for the same node race each other;
 		// this indicates a bug somewhere
-		c.debug(nodeRefcountDropBug{N: n, Node: id})
+		srv.debug(nodeRefcountDropBug{N: n, Node: id})
 
 		// we may end up triggering Forget twice, but that's better
 		// than not even once, and that's the best we can do
@@ -638,26 +380,26 @@ func (c *Server) dropNode(id fuse.NodeID, n uint64) (node Node, forget bool) {
 	}
 
 	if n > snode.refs {
-		c.debug(nodeRefcountDropBug{N: n, Refs: snode.refs, Node: id})
+		srv.debug(nodeRefcountDropBug{N: n, Refs: snode.refs, Node: id})
 		n = snode.refs
 	}
 
 	snode.refs -= n
 	if snode.refs == 0 {
 		snode.wg.Wait()
-		c.node[id] = nil
-		delete(c.nodeRef, snode.node)
-		c.freeNode = append(c.freeNode, id)
+		srv.node[id] = nil
+		delete(srv.nodeRef, snode.node)
+		srv.freeNode = append(srv.freeNode, id)
 		return snode.node, true
 	}
 	return nil, false
 }
 
-func (c *Server) dropHandle(id fuse.HandleID) {
-	c.meta.Lock()
-	c.handle[id] = nil
-	c.freeHandle = append(c.freeHandle, id)
-	c.meta.Unlock()
+func (srv *Server) dropHandle(id fuse.HandleID) {
+	srv.meta.Lock()
+	srv.handle[id] = nil
+	srv.freeHandle = append(srv.freeHandle, id)
+	srv.meta.Unlock()
 }
 
 type missingHandle struct {
@@ -670,16 +412,16 @@ func (m missingHandle) String() string {
 }
 
 // Returns nil for invalid handles.
-func (c *Server) getHandle(id fuse.HandleID) (shandle *serveHandle) {
-	c.meta.Lock()
-	defer c.meta.Unlock()
-	if id < fuse.HandleID(len(c.handle)) {
-		shandle = c.handle[uint(id)]
+func (srv *Server) getHandle(id fuse.HandleID) (shandle *serveHandle) {
+	srv.meta.Lock()
+	defer srv.meta.Unlock()
+	if id < fuse.HandleID(len(srv.handle)) {
+		shandle = srv.handle[uint(id)]
 	}
 	if shandle == nil {
-		c.debug(missingHandle{
+		srv.debug(missingHandle{
 			Handle:    id,
-			MaxHandle: fuse.HandleID(len(c.handle)),
+			MaxHandle: fuse.HandleID(len(srv.handle)),
 		})
 	}
 	return
@@ -916,12 +658,12 @@ func (m *logDuplicateRequestID) String() string {
 	return fmt.Sprintf("Duplicate request: new %v, old %v", m.New, m.Old)
 }
 
-func (c *Server) serve(r fuse.Request) {
+func (srv *Server) serve(r fuse.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	parentCtx := ctx
-	if c.context != nil {
-		ctx = c.context(ctx, r)
+	if srv.context != nil {
+		ctx = srv.context(ctx, r)
 	}
 
 	req := &serveRequest{Request: r, cancel: cancel}
@@ -931,30 +673,30 @@ func (c *Server) serve(r fuse.Request) {
 		// don't log NotifyReply here, they're logged by the recipient
 		// as soon as we have decoded them to the right types
 	default:
-		c.debug(request{
+		srv.debug(request{
 			In: r,
 		})
 	}
 	var node Node
 	var snode *serveNode
-	c.meta.Lock()
+	srv.meta.Lock()
 	hdr := r.Hdr()
 	if id := hdr.Node; id != 0 {
-		if id < fuse.NodeID(len(c.node)) {
-			snode = c.node[uint(id)]
+		if id < fuse.NodeID(len(srv.node)) {
+			snode = srv.node[uint(id)]
 		}
 		if snode == nil {
-			c.meta.Unlock()
+			srv.meta.Unlock()
 			err := syscall.ESTALE
-			c.debug(response{
+			srv.debug(response{
 				Op:      opName(r),
 				Request: logResponseHeader{ID: hdr.ID},
-				Error:   fuse.Errno(err).ErrnoName(),
+				Error:   err.Error(),
 				// this is the only place that sets both Error and
 				// Out; not sure if i want to do that; might get rid
-				// of len(c.node) things altogether
+				// of len(srv.node) things altogether
 				Out: logMissingNode{
-					MaxNode: fuse.NodeID(len(c.node)),
+					MaxNode: fuse.NodeID(len(srv.node)),
 				},
 			})
 			r.RespondError(err)
@@ -962,14 +704,14 @@ func (c *Server) serve(r fuse.Request) {
 		}
 		node = snode.node
 	}
-	if old, found := c.req[hdr.ID]; found {
-		c.debug(logDuplicateRequestID{
+	if old, found := srv.req[hdr.ID]; found {
+		srv.debug(logDuplicateRequestID{
 			New: req.Request,
 			Old: old.Request,
 		})
 	}
-	c.req[hdr.ID] = req
-	c.meta.Unlock()
+	srv.req[hdr.ID] = req
+	srv.meta.Unlock()
 
 	// Call this before responding.
 	// After responding is too late: we might get another request
@@ -990,11 +732,11 @@ func (c *Server) serve(r fuse.Request) {
 		} else {
 			msg.Out = resp
 		}
-		c.debug(msg)
+		srv.debug(msg)
 
-		c.meta.Lock()
-		delete(c.req, hdr.ID)
-		c.meta.Unlock()
+		srv.meta.Lock()
+		delete(srv.req, hdr.ID)
+		srv.meta.Unlock()
 	}
 
 	var responded bool
@@ -1023,7 +765,7 @@ func (c *Server) serve(r fuse.Request) {
 		}
 	}()
 
-	if err := c.handleRequest(ctx, node, snode, r, done); err != nil {
+	if err := srv.handleRequest(ctx, node, snode, r, done); err != nil {
 		if err == context.Canceled {
 			select {
 			case <-parentCtx.Done():
@@ -1052,7 +794,7 @@ func (c *Server) serve(r fuse.Request) {
 }
 
 // handleRequest will either a) call done(s) and r.Respond(s) OR b) return an error.
-func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode, r fuse.Request, done func(resp interface{})) error {
+func (srv *Server) handleRequest(ctx context.Context, node Node, snode *serveNode, r fuse.Request, done func(resp interface{})) error {
 	switch r := r.(type) {
 	default:
 		// Note: To FUSE, ENOSYS means "this server never implements this request."
@@ -1062,7 +804,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 
 	case *fuse.StatfsRequest:
 		s := &fuse.StatfsResponse{}
-		if fs, ok := c.fs.(FSStatfser); ok {
+		if fs, ok := srv.fs.(FSStatfser); ok {
 			if err := fs.Statfs(ctx, r, s); err != nil {
 				return err
 			}
@@ -1072,10 +814,10 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	// Node operations.
-	case *fuse.GetattrRequest:
-		s := &fuse.GetattrResponse{}
-		if n, ok := node.(NodeGetattrer); ok {
-			if err := n.Getattr(ctx, r, s); err != nil {
+	case *fuse.GetAttrRequest:
+		s := &fuse.GetAttrResponse{}
+		if n, ok := node.(NodeGetAttrer); ok {
+			if err := n.GetAttr(ctx, r, s); err != nil {
 				return err
 			}
 		} else {
@@ -1087,10 +829,10 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		r.Respond(s)
 		return nil
 
-	case *fuse.SetattrRequest:
-		s := &fuse.SetattrResponse{}
-		if n, ok := node.(NodeSetattrer); ok {
-			if err := n.Setattr(ctx, r, s); err != nil {
+	case *fuse.SetAttrRequest:
+		s := &fuse.SetAttrResponse{}
+		if n, ok := node.(NodeSetAttrer); ok {
+			if err := n.SetAttr(ctx, r, s); err != nil {
 				return err
 			}
 		} else {
@@ -1114,7 +856,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		if err != nil {
 			return err
 		}
-		if err := c.saveLookup(ctx, &s.LookupResponse, snode, r.NewName, n2); err != nil {
+		if err := srv.saveLookup(ctx, &s.LookupResponse, snode, r.NewName, n2); err != nil {
 			return err
 		}
 		done(s)
@@ -1139,14 +881,14 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		if !ok {
 			return syscall.EIO /// XXX or EPERM?
 		}
-		c.meta.Lock()
+		srv.meta.Lock()
 		var oldNode *serveNode
-		if int(r.OldNode) < len(c.node) {
-			oldNode = c.node[r.OldNode]
+		if int(r.OldNode) < len(srv.node) {
+			oldNode = srv.node[r.OldNode]
 		}
-		c.meta.Unlock()
+		srv.meta.Unlock()
 		if oldNode == nil {
-			c.debug(logLinkRequestOldNodeNotFound{
+			srv.debug(logLinkRequestOldNodeNotFound{
 				Request: r.Hdr(),
 				In:      r,
 			})
@@ -1158,19 +900,19 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		}
 		s := &fuse.LookupResponse{}
 		initLookupResponse(s)
-		if err := c.saveLookup(ctx, s, snode, r.NewName, n2); err != nil {
+		if err := srv.saveLookup(ctx, s, snode, r.NewName, n2); err != nil {
 			return err
 		}
 		done(s)
 		r.Respond(s)
 		return nil
 
-	case *fuse.RemoveRequest:
-		n, ok := node.(NodeRemover)
+	case *fuse.RmdirRequest:
+		n, ok := node.(NodeRmdirer)
 		if !ok {
 			return syscall.EIO /// XXX or EPERM?
 		}
-		err := n.Remove(ctx, r)
+		err := n.Rmdir(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -1203,7 +945,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		if err != nil {
 			return err
 		}
-		if err := c.saveLookup(ctx, s, snode, r.Name, n2); err != nil {
+		if err := srv.saveLookup(ctx, s, snode, r.Name, n2); err != nil {
 			return err
 		}
 		done(s)
@@ -1221,7 +963,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		if err != nil {
 			return err
 		}
-		if err := c.saveLookup(ctx, &s.LookupResponse, snode, r.Name, n2); err != nil {
+		if err := srv.saveLookup(ctx, &s.LookupResponse, snode, r.Name, n2); err != nil {
 			return err
 		}
 		done(s)
@@ -1240,7 +982,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		} else {
 			h2 = node
 		}
-		s.Handle = c.saveHandle(h2)
+		s.Handle = srv.saveHandle(h2)
 		done(s)
 		r.Respond(s)
 		return nil
@@ -1257,21 +999,21 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		if err != nil {
 			return err
 		}
-		if err := c.saveLookup(ctx, &s.LookupResponse, snode, r.Name, n2); err != nil {
+		if err := srv.saveLookup(ctx, &s.LookupResponse, snode, r.Name, n2); err != nil {
 			return err
 		}
-		s.Handle = c.saveHandle(h2)
+		s.Handle = srv.saveHandle(h2)
 		done(s)
 		r.Respond(s)
 		return nil
 
-	case *fuse.GetxattrRequest:
-		n, ok := node.(NodeGetxattrer)
+	case *fuse.GetXAttrRequest:
+		n, ok := node.(NodeGetXAttrer)
 		if !ok {
 			return syscall.ENOTSUP
 		}
-		s := &fuse.GetxattrResponse{}
-		err := n.Getxattr(ctx, r, s)
+		s := &fuse.GetXAttrResponse{}
+		err := n.GetXAttr(ctx, r, s)
 		if err != nil {
 			return err
 		}
@@ -1282,13 +1024,13 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		r.Respond(s)
 		return nil
 
-	case *fuse.ListxattrRequest:
-		n, ok := node.(NodeListxattrer)
+	case *fuse.ListXAttrRequest:
+		n, ok := node.(NodeListXAttrer)
 		if !ok {
 			return syscall.ENOTSUP
 		}
-		s := &fuse.ListxattrResponse{}
-		err := n.Listxattr(ctx, r, s)
+		s := &fuse.ListXAttrResponse{}
+		err := n.ListXAttr(ctx, r, s)
 		if err != nil {
 			return err
 		}
@@ -1299,12 +1041,12 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		r.Respond(s)
 		return nil
 
-	case *fuse.SetxattrRequest:
-		n, ok := node.(NodeSetxattrer)
+	case *fuse.SetXAttrRequest:
+		n, ok := node.(NodeSetXAttrer)
 		if !ok {
 			return syscall.ENOTSUP
 		}
-		err := n.Setxattr(ctx, r)
+		err := n.SetXAttr(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -1312,12 +1054,12 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		r.Respond()
 		return nil
 
-	case *fuse.RemovexattrRequest:
-		n, ok := node.(NodeRemovexattrer)
+	case *fuse.RemoveXAttrRequest:
+		n, ok := node.(NodeRemoveXAttrer)
 		if !ok {
 			return syscall.ENOTSUP
 		}
-		err := n.Removexattr(ctx, r)
+		err := n.RemoveXAttr(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -1326,7 +1068,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.ForgetRequest:
-		_, forget := c.dropNode(r.Hdr().Node, r.N)
+		_, forget := srv.dropNode(r.Hdr().Node, r.N)
 		if forget {
 			n, ok := node.(NodeForgetter)
 			if ok {
@@ -1351,7 +1093,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		// node is nil here because BatchForget as a message is not
 		// aimed at a any one node
 		for _, item := range r.Forget {
-			node, forget := c.dropNode(item.NodeID, item.N)
+			node, forget := srv.dropNode(item.NodeID, item.N)
 			// node can be nil here if kernel vs our refcount were out
 			// of sync and multiple Forgets raced each other
 			if node == nil {
@@ -1371,7 +1113,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 
 	// Handle operations.
 	case *fuse.ReadRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1394,7 +1136,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 					var data []byte
 					for _, dir := range dirs {
 						if dir.Inode == 0 {
-							dir.Inode = c.dynamicInode(snode.inode, dir.Name)
+							dir.Inode = srv.dynamicInode(snode.inode, dir.Name)
 						}
 						data = fuse.AppendDirent(data, dir)
 					}
@@ -1436,7 +1178,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.WriteRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1453,7 +1195,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return syscall.EIO
 
 	case *fuse.FlushRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1469,14 +1211,14 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.ReleaseRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
 		handle := shandle.handle
 
 		// No matter what, release the handle.
-		c.dropHandle(r.Handle)
+		srv.dropHandle(r.Handle)
 
 		if h, ok := handle.(HandleReleaser); ok {
 			if err := h.Release(ctx, r); err != nil {
@@ -1488,7 +1230,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.DestroyRequest:
-		if fs, ok := c.fs.(FSDestroyer); ok {
+		if fs, ok := srv.fs.(FSDestroyer); ok {
 			fs.Destroy()
 		}
 		done(nil)
@@ -1496,14 +1238,14 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.RenameRequest:
-		c.meta.Lock()
+		srv.meta.Lock()
 		var newDirNode *serveNode
-		if int(r.NewDir) < len(c.node) {
-			newDirNode = c.node[r.NewDir]
+		if int(r.NewDir) < len(srv.node) {
+			newDirNode = srv.node[r.NewDir]
 		}
-		c.meta.Unlock()
+		srv.meta.Unlock()
 		if newDirNode == nil {
-			c.debug(renameNewDirNodeNotFound{
+			srv.debug(renameNewDirNodeNotFound{
 				Request: r.Hdr(),
 				In:      r,
 			})
@@ -1532,7 +1274,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		}
 		s := &fuse.LookupResponse{}
 		initLookupResponse(s)
-		if err := c.saveLookup(ctx, s, snode, r.Name, n2); err != nil {
+		if err := srv.saveLookup(ctx, s, snode, r.Name, n2); err != nil {
 			return err
 		}
 		done(s)
@@ -1553,19 +1295,19 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.InterruptRequest:
-		c.meta.Lock()
-		ireq := c.req[r.IntrID]
+		srv.meta.Lock()
+		ireq := srv.req[r.IntrID]
 		if ireq != nil && ireq.cancel != nil {
 			ireq.cancel()
 			ireq.cancel = nil
 		}
-		c.meta.Unlock()
+		srv.meta.Unlock()
 		done(nil)
 		r.Respond()
 		return nil
 
 	case *fuse.PollRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1596,14 +1338,14 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.NotifyReply:
-		c.notifyMu.Lock()
-		w, ok := c.notifyWait[r.Hdr().ID]
+		srv.notifyMu.Lock()
+		w, ok := srv.notifyWait[r.Hdr().ID]
 		if ok {
-			delete(c.notifyWait, r.Hdr().ID)
+			delete(srv.notifyWait, r.Hdr().ID)
 		}
-		c.notifyMu.Unlock()
+		srv.notifyMu.Unlock()
 		if !ok {
-			c.debug(notificationResponse{
+			srv.debug(notificationResponse{
 				ID:  r.Hdr().ID,
 				Op:  "NotifyReply",
 				Err: "unknown ID",
@@ -1614,7 +1356,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.LockRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1630,7 +1372,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.LockWaitRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1646,7 +1388,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.UnlockRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1662,7 +1404,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.QueryLockRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1683,7 +1425,7 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 		return nil
 
 	case *fuse.FAllocateRequest:
-		shandle := c.getHandle(r.Handle)
+		shandle := srv.getHandle(r.Handle)
 		if shandle == nil {
 			return syscall.ESTALE
 		}
@@ -1707,15 +1449,15 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 	}
 }
 
-func (c *Server) saveLookup(ctx context.Context, s *fuse.LookupResponse, snode *serveNode, elem string, n2 Node) error {
+func (srv *Server) saveLookup(ctx context.Context, s *fuse.LookupResponse, snode *serveNode, elem string, n2 Node) error {
 	if err := nodeAttr(ctx, n2, &s.Attr); err != nil {
 		return err
 	}
 	if s.Attr.Inode == 0 {
-		s.Attr.Inode = c.dynamicInode(snode.inode, elem)
+		s.Attr.Inode = srv.dynamicInode(snode.inode, elem)
 	}
 
-	s.Node, s.Generation = c.saveNode(s.Attr.Inode, n2)
+	s.Node, s.Generation = srv.saveNode(s.Attr.Inode, n2)
 	return nil
 }
 
@@ -1735,25 +1477,25 @@ func errstr(err error) string {
 	return err.Error()
 }
 
-func (s *Server) invalidateNode(node Node, off int64, size int64) error {
-	s.meta.Lock()
-	id, ok := s.nodeRef[node]
+func (srv *Server) invalidateNode(node Node, off int64, size int64) error {
+	srv.meta.Lock()
+	id, ok := srv.nodeRef[node]
 	if ok {
-		snode := s.node[id]
+		snode := srv.node[id]
 		snode.wg.Add(1)
 		defer snode.wg.Done()
 	}
-	s.meta.Unlock()
+	srv.meta.Unlock()
 	if !ok {
 		// This is what the kernel would have said, if we had been
-		// able to send this message; it's not cached.
+		// able to send this message; it'srv not cached.
 		return fuse.ErrNotCached
 	}
 	// Delay logging until after we can record the error too. We
 	// consider a /dev/fuse write to be instantaneous enough to not
 	// need separate before and after messages.
-	err := s.conn.InvalidateNode(id, off, size)
-	s.debug(notification{
+	err := srv.conn.InvalidateNode(id, off, size)
+	srv.debug(notification{
 		Op:   "InvalidateNode",
 		Node: id,
 		Out: invalidateNodeDetail{
@@ -1770,8 +1512,8 @@ func (s *Server) invalidateNode(node Node, off int64, size int64) error {
 //
 // Returns fuse.ErrNotCached if the kernel is not currently caching
 // the node.
-func (s *Server) InvalidateNodeAttr(node Node) error {
-	return s.invalidateNode(node, 0, 0)
+func (srv *Server) InvalidateNodeAttr(node Node) error {
+	return srv.invalidateNode(node, 0, 0)
 }
 
 // InvalidateNodeData invalidates the kernel cache of the attributes
@@ -1779,8 +1521,8 @@ func (s *Server) InvalidateNodeAttr(node Node) error {
 //
 // Returns fuse.ErrNotCached if the kernel is not currently caching
 // the node.
-func (s *Server) InvalidateNodeData(node Node) error {
-	return s.invalidateNode(node, 0, -1)
+func (srv *Server) InvalidateNodeData(node Node) error {
+	return srv.invalidateNode(node, 0, -1)
 }
 
 // InvalidateNodeDataRange invalidates the kernel cache of the
@@ -1788,8 +1530,8 @@ func (s *Server) InvalidateNodeData(node Node) error {
 //
 // Returns fuse.ErrNotCached if the kernel is not currently caching
 // the node.
-func (s *Server) InvalidateNodeDataRange(node Node, off int64, size int64) error {
-	return s.invalidateNode(node, off, size)
+func (srv *Server) InvalidateNodeDataRange(node Node, off int64, size int64) error {
+	return srv.invalidateNode(node, off, size)
 }
 
 type invalidateEntryDetail struct {
@@ -1810,22 +1552,22 @@ func (i invalidateEntryDetail) String() string {
 //
 // Returns ErrNotCached if the kernel is not currently caching the
 // node.
-func (s *Server) InvalidateEntry(parent Node, name string) error {
-	s.meta.Lock()
-	id, ok := s.nodeRef[parent]
+func (srv *Server) InvalidateEntry(parent Node, name string) error {
+	srv.meta.Lock()
+	id, ok := srv.nodeRef[parent]
 	if ok {
-		snode := s.node[id]
+		snode := srv.node[id]
 		snode.wg.Add(1)
 		defer snode.wg.Done()
 	}
-	s.meta.Unlock()
+	srv.meta.Unlock()
 	if !ok {
 		// This is what the kernel would have said, if we had been
-		// able to send this message; it's not cached.
+		// able to send this message; it'srv not cached.
 		return fuse.ErrNotCached
 	}
-	err := s.conn.InvalidateEntry(id, name)
-	s.debug(notification{
+	err := srv.conn.InvalidateEntry(id, name)
+	srv.debug(notification{
 		Op:   "InvalidateEntry",
 		Node: id,
 		Out: invalidateEntryDetail{
@@ -1862,33 +1604,33 @@ func (i notifyDeleteDetail) String() string {
 //   - [ENOTEMPTY]: entry is a directory, with entries inside it still cached
 //
 // [Linux kernel commit `451d0f599934fd97faf54a5d7954b518e66192cb`]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=451d0f599934fd97faf54a5d7954b518e66192cb
-func (s *Server) NotifyDelete(parent Node, child Node, name string) error {
-	s.meta.Lock()
-	parentID, parentOk := s.nodeRef[parent]
+func (srv *Server) NotifyDelete(parent Node, child Node, name string) error {
+	srv.meta.Lock()
+	parentID, parentOk := srv.nodeRef[parent]
 	var childID fuse.NodeID = 0
 	childOk := true
 	if parentOk {
-		snode := s.node[parentID]
+		snode := srv.node[parentID]
 		snode.wg.Add(1)
 		defer snode.wg.Done()
 
 		if child != nil {
-			childID, childOk = s.nodeRef[child]
+			childID, childOk = srv.nodeRef[child]
 			if childOk {
-				snode := s.node[childID]
+				snode := srv.node[childID]
 				snode.wg.Add(1)
 				defer snode.wg.Done()
 			}
 		}
 	}
-	s.meta.Unlock()
+	srv.meta.Unlock()
 	if !parentOk || !childOk {
 		// This is what the kernel would have said, if we had been
-		// able to send this message; it's not cached.
+		// able to send this message; it'srv not cached.
 		return fuse.ErrNotCached
 	}
-	err := s.conn.NotifyDelete(parentID, childID, name)
-	s.debug(notification{
+	err := srv.conn.NotifyDelete(parentID, childID, name)
+	srv.debug(notification{
 		Op:   "NotifyDelete",
 		Node: parentID,
 		Out: notifyDeleteDetail{
@@ -1921,25 +1663,25 @@ func (i notifyRetrieveReplyDetail) String() string {
 //
 // Returns fuse.ErrNotCached if the kernel is not currently caching
 // the node.
-func (s *Server) NotifyStore(node Node, offset uint64, data []byte) error {
-	s.meta.Lock()
-	id, ok := s.nodeRef[node]
+func (srv *Server) NotifyStore(node Node, offset uint64, data []byte) error {
+	srv.meta.Lock()
+	id, ok := srv.nodeRef[node]
 	if ok {
-		snode := s.node[id]
+		snode := srv.node[id]
 		snode.wg.Add(1)
 		defer snode.wg.Done()
 	}
-	s.meta.Unlock()
+	srv.meta.Unlock()
 	if !ok {
 		// This is what the kernel would have said, if we had been
-		// able to send this message; it's not cached.
+		// able to send this message; it'srv not cached.
 		return fuse.ErrNotCached
 	}
 	// Delay logging until after we can record the error too. We
 	// consider a /dev/fuse write to be instantaneous enough to not
 	// need separate before and after messages.
-	err := s.conn.NotifyStore(id, offset, data)
-	s.debug(notification{
+	err := srv.conn.NotifyStore(id, offset, data)
+	srv.debug(notification{
 		Op:   "NotifyStore",
 		Node: id,
 		Out: notifyStoreRetrieveDetail{
@@ -1955,34 +1697,34 @@ func (s *Server) NotifyStore(node Node, offset uint64, data []byte) error {
 //
 // Returns fuse.ErrNotCached if the kernel is not currently caching
 // the node.
-func (s *Server) NotifyRetrieve(node Node, offset uint64, size uint32) ([]byte, error) {
-	s.meta.Lock()
-	id, ok := s.nodeRef[node]
+func (srv *Server) NotifyRetrieve(node Node, offset uint64, size uint32) ([]byte, error) {
+	srv.meta.Lock()
+	id, ok := srv.nodeRef[node]
 	if ok {
-		snode := s.node[id]
+		snode := srv.node[id]
 		snode.wg.Add(1)
 		defer snode.wg.Done()
 	}
-	s.meta.Unlock()
+	srv.meta.Unlock()
 	if !ok {
 		// This is what the kernel would have said, if we had been
-		// able to send this message; it's not cached.
+		// able to send this message; it'srv not cached.
 		return nil, fuse.ErrNotCached
 	}
 
 	ch := make(chan *fuse.NotifyReply, 1)
-	s.notifyMu.Lock()
+	srv.notifyMu.Lock()
 	const wraparoundThreshold = 1 << 63
-	if s.notifySeq > wraparoundThreshold {
-		s.notifyMu.Unlock()
+	if srv.notifySeq > wraparoundThreshold {
+		srv.notifyMu.Unlock()
 		return nil, errors.New("running out of notify sequence numbers")
 	}
-	s.notifySeq++
-	seq := s.notifySeq
-	s.notifyWait[seq] = ch
-	s.notifyMu.Unlock()
+	srv.notifySeq++
+	seq := srv.notifySeq
+	srv.notifyWait[seq] = ch
+	srv.notifyMu.Unlock()
 
-	s.debug(notificationRequest{
+	srv.debug(notificationRequest{
 		ID:   seq,
 		Op:   "NotifyRetrieve",
 		Node: id,
@@ -1991,9 +1733,9 @@ func (s *Server) NotifyRetrieve(node Node, offset uint64, size uint32) ([]byte, 
 			Size: uint64(size),
 		},
 	})
-	retrieval, err := s.conn.NotifyRetrieve(seq, id, offset, size)
+	retrieval, err := srv.conn.NotifyRetrieve(seq, id, offset, size)
 	if err != nil {
-		s.debug(notificationResponse{
+		srv.debug(notificationResponse{
 			ID:  seq,
 			Op:  "NotifyRetrieve",
 			Err: errstr(err),
@@ -2003,7 +1745,7 @@ func (s *Server) NotifyRetrieve(node Node, offset uint64, size uint32) ([]byte, 
 
 	reply := <-ch
 	data := retrieval.Finish(reply)
-	s.debug(notificationResponse{
+	srv.debug(notificationResponse{
 		ID: seq,
 		Op: "NotifyRetrieve",
 		In: notifyRetrieveReplyDetail{
@@ -2013,12 +1755,12 @@ func (s *Server) NotifyRetrieve(node Node, offset uint64, size uint32) ([]byte, 
 	return data, nil
 }
 
-func (s *Server) NotifyPollWakeup(wakeup fuse.PollWakeup) error {
+func (srv *Server) NotifyPollWakeup(wakeup fuse.PollWakeup) error {
 	// Delay logging until after we can record the error too. We
 	// consider a /dev/fuse write to be instantaneous enough to not
 	// need separate before and after messages.
-	err := s.conn.NotifyPollWakeup(wakeup)
-	s.debug(notification{
+	err := srv.conn.NotifyPollWakeup(wakeup)
+	srv.debug(notification{
 		Op:  "NotifyPollWakeup",
 		Out: wakeup,
 		Err: errstr(err),
